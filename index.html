@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NON-OFS ILEC Cluster Explorer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',-apple-system,sans-serif;background:#0a0a0a;color:#e2e8f0;overflow:hidden;height:100vh}
+#header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #cd040b;height:52px}
+#header h1{font-size:18px;font-weight:600;color:#fff}
+#header .sub{font-size:12px;color:#94a3b8;margin-left:12px}
+#nav-breadcrumb{display:flex;gap:6px;align-items:center;font-size:13px;color:#94a3b8}
+#nav-breadcrumb span{cursor:pointer;color:#60a5fa;text-decoration:underline}
+#nav-breadcrumb span:hover{color:#93c5fd}
+#nav-breadcrumb .sep{color:#475569;cursor:default;text-decoration:none}
+#main{display:flex;height:calc(100vh - 52px)}
+#left{width:360px;min-width:360px;background:#111827;overflow-y:auto;border-right:1px solid #1e293b;display:flex;flex-direction:column}
+#search-box{padding:10px 12px;border-bottom:1px solid #1e293b}
+#search-box input{width:100%;padding:8px 12px;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;font-size:13px;outline:none}
+#search-box input:focus{border-color:#3b82f6}
+#search-box input::placeholder{color:#64748b}
+#search-results{position:absolute;z-index:1000;background:#1e293b;border:1px solid #334155;border-radius:0 0 6px 6px;max-height:300px;overflow-y:auto;width:336px;display:none}
+#search-results .sr-item{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #0f172a}
+#search-results .sr-item:hover{background:#334155}
+#search-results .sr-item .sr-clli{font-weight:600;color:#fff}
+#search-results .sr-item .sr-info{color:#94a3b8;font-size:11px}
+#kpi-section{padding:12px}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.kpi-tile{background:#1e293b;border-radius:8px;padding:10px 12px;border-left:3px solid #3b82f6}
+.kpi-tile .kpi-label{font-size:10px;text-transform:uppercase;color:#64748b;letter-spacing:0.5px}
+.kpi-tile .kpi-value{font-size:20px;font-weight:700;font-family:'Consolas',monospace;color:#fff;margin-top:2px}
+.kpi-tile.red{border-left-color:#ef4444}
+.kpi-tile.blue{border-left-color:#3b82f6}
+.kpi-tile.green{border-left-color:#06d6a0}
+.kpi-tile.amber{border-left-color:#f59e0b}
+.kpi-tile.purple{border-left-color:#a855f7}
+.kpi-tile.gray{border-left-color:#6b7280}
+.section-title{font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 8px;padding:0 12px}
+#card-list{flex:1;overflow-y:auto;padding:0 12px 12px}
+.region-card,.wc-card{background:#1e293b;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all 0.15s;border:1px solid transparent}
+.region-card:hover,.wc-card:hover{border-color:#3b82f6;background:#1e2d4a}
+.region-card .card-title{font-size:14px;font-weight:600;color:#fff}
+.region-card .card-stats{display:flex;gap:16px;margin-top:6px;font-size:12px;color:#94a3b8}
+.region-card .card-stats span{font-family:'Consolas',monospace}
+.wc-card{padding:10px 12px}
+.wc-card .wc-clli{font-size:13px;font-weight:600;color:#fff;font-family:'Consolas',monospace}
+.wc-card .wc-name{font-size:11px;color:#64748b}
+.wc-card .wc-stats{display:flex;gap:12px;margin-top:4px;font-size:11px;color:#94a3b8}
+.wc-card .wc-stats .val{font-family:'Consolas',monospace;color:#e2e8f0}
+.eisenhower-bar{display:flex;height:20px;border-radius:4px;overflow:hidden;margin:4px 0 8px}
+.eisenhower-bar .seg{height:100%}
+#right{flex:1;display:flex;flex-direction:column;position:relative}
+#map{flex:1}
+#legend{position:absolute;bottom:10px;right:10px;z-index:800;background:rgba(17,24,39,0.92);border-radius:8px;padding:10px 14px;font-size:11px;border:1px solid #334155}
+#legend .leg-title{font-weight:600;margin-bottom:6px;color:#94a3b8;font-size:10px;text-transform:uppercase}
+#legend .leg-item{display:flex;align-items:center;gap:6px;margin:3px 0}
+#legend .leg-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+#bottom-panel{display:none;background:#111827;border-top:1px solid #1e293b;max-height:35vh;overflow-y:auto}
+#bottom-panel table{width:100%;border-collapse:collapse;font-size:12px}
+#bottom-panel th{position:sticky;top:0;background:#1e293b;padding:8px 10px;text-align:left;font-weight:600;color:#94a3b8;cursor:pointer;font-size:11px;text-transform:uppercase;white-space:nowrap;border-bottom:1px solid #334155}
+#bottom-panel th:hover{color:#3b82f6}
+#bottom-panel td{padding:6px 10px;border-bottom:1px solid #0f172a;white-space:nowrap}
+#bottom-panel tr:hover{background:#1e293b}
+#bottom-panel tr.selected{background:#1e3a5f}
+#bottom-panel .dl-bar{padding:8px 12px;background:#1e293b;display:flex;gap:8px;border-bottom:1px solid #334155}
+#bottom-panel .dl-btn{padding:5px 12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}
+#bottom-panel .dl-btn:hover{background:#2563eb}
+.loading-msg{text-align:center;padding:40px;color:#64748b;font-size:14px}
+#sort-controls{padding:8px 12px;display:none;border-bottom:1px solid #1e293b}
+#sort-controls select{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:4px 8px;font-size:12px}
+.back-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#1e293b;color:#60a5fa;border:1px solid #334155;border-radius:4px;font-size:12px;cursor:pointer;margin-bottom:8px}
+.back-btn:hover{background:#334155}
+#scatter-canvas{width:100%;height:160px;margin:8px 0;background:#0f172a;border-radius:6px}
+.q1{color:#ef4444}.q2{color:#3b82f6}.q3{color:#f59e0b}.q4{color:#6b7280}
+</style>
+</head>
+<body>
+<div id="header">
+  <div style="display:flex;align-items:center">
+    <h1>NON-OFS ILEC Cluster Explorer</h1>
+    <span class="sub">12.3M Addresses &middot; 68,071 Clusters &middot; 2,078 Wire Centers</span>
+  </div>
+  <div id="nav-breadcrumb"></div>
+</div>
+<div id="main">
+  <div id="left">
+    <div id="search-box">
+      <input type="text" id="clli-search" placeholder="Search CLLI or wire center name..." autocomplete="off">
+      <div id="search-results"></div>
+    </div>
+    <div id="kpi-section"></div>
+    <div id="sort-controls">
+      <label style="font-size:11px;color:#64748b">Sort by:
+        <select id="wc-sort" onchange="sortWcList()">
+          <option value="u">Units</option>
+          <option value="irr">IRR</option>
+          <option value="cpp">CPP</option>
+          <option value="cl">Clusters</option>
+          <option value="q1">Q1 Count</option>
+        </select>
+      </label>
+    </div>
+    <div id="card-list"></div>
+  </div>
+  <div id="right">
+    <div id="map"></div>
+    <div id="legend"></div>
+    <div id="bottom-panel"></div>
+  </div>
+</div>
+<script src="data/summary.js"></script>
+<script>
+// ============================================================
+// State
+// ============================================================
+let VIEW = 'national'; // national | subregion | wc
+let currentSR = null;
+let currentWC = null;
+const srCache = {};
+const wcCache = {};
+
+// Color constants
+const Q_COLORS = {Q1:'#ef4444',Q2:'#3b82f6',Q3:'#f59e0b',Q4:'#6b7280'};
+const Q_LABELS = {Q1:'Do First',Q2:'Schedule',Q3:'Must Do',Q4:'Deprioritize'};
+const AUI_COLORS = {SFU:'#4895ef',SBU:'#06d6a0',MDU:'#f59e0b',MTU:'#a855f7'};
+const REGION_COLORS = {'Northeast Metro':'#4895ef','Potomac':'#06d6a0','Tri-State':'#f59e0b'};
+
+// Formatters
+const fmtN = v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(v>=1e4?0:1)+'K' : String(v);
+const fmtD = v => '$'+fmtN(v);
+const fmtC = v => '$'+v.toLocaleString();
+const fmtP = v => v.toFixed(1)+'%';
+
+// ============================================================
+// Map Setup
+// ============================================================
+const map = L.map('map',{preferCanvas:true,zoomControl:true}).setView([40.7,-74.5],6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; OSM &copy; CARTO',maxZoom:19
+}).addTo(map);
+
+let wcLayer = null;       // WC boundary polygons (L2)
+let centroidLayer = null;  // cluster centroids (L2)
+let clusterLayer = null;   // cluster polygons (L3)
+let addrLayer = null;      // address points (L3)
+let wcOutline = null;      // single WC outline (L3)
+let highlightLayer = null; // highlighted cluster
+
+function clearLayers(){
+  [wcLayer,centroidLayer,clusterLayer,addrLayer,wcOutline,highlightLayer].forEach(l=>{if(l)map.removeLayer(l)});
+  wcLayer=centroidLayer=clusterLayer=addrLayer=wcOutline=highlightLayer=null;
+}
+
+// ============================================================
+// L1 — National View
+// ============================================================
+function showNational(){
+  VIEW='national';currentSR=null;currentWC=null;
+  clearLayers();
+  map.setView([40.7,-74.5],6);
+  document.getElementById('bottom-panel').style.display='none';
+  document.getElementById('sort-controls').style.display='none';
+  updateBreadcrumb();
+
+  const S = window._summary;
+  // KPIs
+  let kpi = `<div class="kpi-grid">
+    <div class="kpi-tile blue"><div class="kpi-label">Wire Centers</div><div class="kpi-value">${fmtN(S.national.wcs)}</div></div>
+    <div class="kpi-tile green"><div class="kpi-label">Clusters</div><div class="kpi-value">${fmtN(S.national.clusters)}</div></div>
+    <div class="kpi-tile purple"><div class="kpi-label">Total Units</div><div class="kpi-value">${fmtN(S.national.units)}</div></div>
+    <div class="kpi-tile amber"><div class="kpi-label">Total CAPEX</div><div class="kpi-value">${fmtD(S.national.capex)}</div></div>
+  </div>`;
+
+  // Eisenhower bar
+  const total = S.national.q1+S.national.q2+S.national.q3+S.national.q4;
+  kpi += `<div class="section-title" style="padding:0">Eisenhower Distribution</div>
+  <div class="eisenhower-bar">
+    <div class="seg" style="width:${S.national.q1/total*100}%;background:${Q_COLORS.Q1}" title="Q1: ${fmtN(S.national.q1)}"></div>
+    <div class="seg" style="width:${S.national.q2/total*100}%;background:${Q_COLORS.Q2}" title="Q2: ${fmtN(S.national.q2)}"></div>
+    <div class="seg" style="width:${S.national.q3/total*100}%;background:${Q_COLORS.Q3}" title="Q3: ${fmtN(S.national.q3)}"></div>
+    <div class="seg" style="width:${S.national.q4/total*100}%;background:${Q_COLORS.Q4}" title="Q4: ${fmtN(S.national.q4)}"></div>
+  </div>
+  <div style="display:flex;gap:12px;font-size:11px;color:#94a3b8;margin-bottom:8px;padding:0 2px">
+    <span><span class="q1">&bull;</span> Q1 ${fmtN(S.national.q1)}</span>
+    <span><span class="q2">&bull;</span> Q2 ${fmtN(S.national.q2)}</span>
+    <span><span class="q3">&bull;</span> Q3 ${fmtN(S.national.q3)}</span>
+    <span><span class="q4">&bull;</span> Q4 ${fmtN(S.national.q4)}</span>
+  </div>`;
+  document.getElementById('kpi-section').innerHTML = kpi;
+
+  // Region cards
+  let cards = '<div class="section-title">Regions</div>';
+  S.regions.forEach(r => {
+    const color = REGION_COLORS[r.name]||'#6b7280';
+    cards += `<div class="region-card" onclick="showRegion('${r.name}')" style="border-left:3px solid ${color}">
+      <div class="card-title">${r.name}</div>
+      <div class="card-stats">
+        <span>${r.wcs} WCs</span>
+        <span>${fmtN(r.clusters)} clusters</span>
+        <span>${fmtN(r.units)} units</span>
+        <span>${fmtD(r.capex)}</span>
+      </div>
+      <div class="eisenhower-bar" style="margin-top:6px">
+        <div class="seg" style="width:${r.q1/(r.q1+r.q2+r.q3+r.q4)*100}%;background:${Q_COLORS.Q1}"></div>
+        <div class="seg" style="width:${r.q2/(r.q1+r.q2+r.q3+r.q4)*100}%;background:${Q_COLORS.Q2}"></div>
+        <div class="seg" style="width:${r.q3/(r.q1+r.q2+r.q3+r.q4)*100}%;background:${Q_COLORS.Q3}"></div>
+        <div class="seg" style="width:${r.q4/(r.q1+r.q2+r.q3+r.q4)*100}%;background:${Q_COLORS.Q4}"></div>
+      </div>
+    </div>`;
+  });
+
+  // Sub-region cards
+  cards += '<div class="section-title">Sub-Regions</div>';
+  S.sub_regions.sort((a,b)=>b.units-a.units).forEach(sr => {
+    const color = REGION_COLORS[sr.region]||'#6b7280';
+    cards += `<div class="region-card" onclick="loadSubRegion('${sr.key}')" style="border-left:3px solid ${color}">
+      <div class="card-title">${sr.name} <span style="font-size:11px;color:#64748b;font-weight:400">${sr.region}</span></div>
+      <div class="card-stats">
+        <span>${sr.wcs} WCs</span>
+        <span>${fmtN(sr.clusters)} clst</span>
+        <span>${fmtN(sr.units)} units</span>
+        <span>IRR ${sr.avg_irr}%</span>
+      </div>
+    </div>`;
+  });
+  document.getElementById('card-list').innerHTML = cards;
+
+  // Legend
+  document.getElementById('legend').innerHTML = `<div class="leg-title">Eisenhower Quadrant</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q1}"></span> Q1 — Do First</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q2}"></span> Q2 — Schedule</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q3}"></span> Q3 — Must Do</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q4}"></span> Q4 — Deprioritize</div>`;
+}
+
+function showRegion(name){
+  const S = window._summary;
+  const region = S.regions.find(r=>r.name===name);
+  if(!region)return;
+  // Load all sub-regions for this region
+  region.subs.forEach(key=>loadSubRegion(key));
+}
+
+// ============================================================
+// L2 — Sub-Region View
+// ============================================================
+function loadSubRegion(key){
+  if(srCache[key]){
+    renderSubRegion(key);
+    return;
+  }
+  // Show loading
+  document.getElementById('card-list').innerHTML = '<div class="loading-msg">Loading sub-region data...</div>';
+  const script = document.createElement('script');
+  script.src = 'data/sr/'+key+'.js';
+  script.onerror = ()=>{ document.getElementById('card-list').innerHTML = '<div class="loading-msg">Failed to load data for '+key+'</div>'; };
+  document.head.appendChild(script);
+}
+
+window._onSR = function(key, data){
+  srCache[key] = data;
+  renderSubRegion(key);
+};
+
+function renderSubRegion(key){
+  VIEW='subregion';currentSR=key;currentWC=null;
+  clearLayers();
+  document.getElementById('bottom-panel').style.display='none';
+  document.getElementById('sort-controls').style.display='block';
+  const data = srCache[key];
+  const S = window._summary;
+  const srInfo = S.sub_regions.find(s=>s.key===key);
+  updateBreadcrumb();
+
+  // KPIs for this sub-region
+  let kpi = `<div class="kpi-grid">
+    <div class="kpi-tile blue"><div class="kpi-label">Wire Centers</div><div class="kpi-value">${srInfo.wcs}</div></div>
+    <div class="kpi-tile green"><div class="kpi-label">Clusters</div><div class="kpi-value">${fmtN(srInfo.clusters)}</div></div>
+    <div class="kpi-tile purple"><div class="kpi-label">Total Units</div><div class="kpi-value">${fmtN(srInfo.units)}</div></div>
+    <div class="kpi-tile amber"><div class="kpi-label">Avg IRR</div><div class="kpi-value">${srInfo.avg_irr}%</div></div>
+  </div>`;
+  const e = srInfo.eisenhower, et = e.Q1+e.Q2+e.Q3+e.Q4;
+  kpi += `<div class="eisenhower-bar">
+    <div class="seg" style="width:${e.Q1/et*100}%;background:${Q_COLORS.Q1}"></div>
+    <div class="seg" style="width:${e.Q2/et*100}%;background:${Q_COLORS.Q2}"></div>
+    <div class="seg" style="width:${e.Q3/et*100}%;background:${Q_COLORS.Q3}"></div>
+    <div class="seg" style="width:${e.Q4/et*100}%;background:${Q_COLORS.Q4}"></div>
+  </div>`;
+  document.getElementById('kpi-section').innerHTML = kpi;
+
+  // WC boundary layer
+  wcLayer = L.geoJSON(data.wcs, {
+    style: feat => {
+      const clli = feat.properties.CLLI;
+      const ws = data.wc_stats[clli];
+      if(!ws) return {fillColor:'#334155',fillOpacity:0.2,color:'#475569',weight:1};
+      // Color by dominant quadrant
+      const qmax = Math.max(ws.q1,ws.q2,ws.q3,ws.q4);
+      let qc = Q_COLORS.Q4;
+      if(ws.q1===qmax) qc=Q_COLORS.Q1;
+      else if(ws.q2===qmax) qc=Q_COLORS.Q2;
+      else if(ws.q3===qmax) qc=Q_COLORS.Q3;
+      return {fillColor:qc,fillOpacity:0.25,color:'#475569',weight:1};
+    },
+    onEachFeature: (feat, layer) => {
+      const clli = feat.properties.CLLI;
+      const ws = data.wc_stats[clli];
+      if(ws){
+        layer.bindTooltip(`<b>${clli}</b> ${feat.properties.WIRECENTER||''}<br>
+          ${fmtN(ws.u)} units &middot; ${ws.cl} clusters &middot; IRR ${ws.irr}%<br>
+          CPP $${fmtN(ws.x/ws.u)} &middot; Q1:${ws.q1} Q2:${ws.q2} Q3:${ws.q3} Q4:${ws.q4}`,
+          {sticky:true,className:'dark-tooltip'});
+      }
+      layer.on('click', ()=> loadWireCenter(clli));
+    }
+  }).addTo(map);
+
+  // Cluster centroids
+  centroidLayer = L.layerGroup();
+  data.centroids.forEach(c => {
+    const [lat,lon,cid,q,units,capex] = c;
+    const color = Q_COLORS[q]||'#6b7280';
+    const r = Math.max(2, Math.min(6, Math.sqrt(units/50)));
+    L.circleMarker([lat,lon],{radius:r,fillColor:color,fillOpacity:0.7,color:color,weight:0.5,opacity:0.8})
+      .bindTooltip(`${cid}<br>${fmtN(units)} units`,{className:'dark-tooltip'})
+      .addTo(centroidLayer);
+  });
+  centroidLayer.addTo(map);
+
+  // Fit map to WC bounds
+  if(wcLayer.getBounds().isValid()) map.fitBounds(wcLayer.getBounds(),{padding:[20,20]});
+
+  // WC card list
+  renderWcList(data, key);
+}
+
+let wcListData = null;
+let wcListKey = null;
+
+function renderWcList(data, key){
+  wcListData = data;
+  wcListKey = key;
+  sortWcList();
+}
+
+function sortWcList(){
+  if(!wcListData) return;
+  const data = wcListData;
+  const sortBy = document.getElementById('wc-sort').value;
+  const entries = Object.entries(data.wc_stats);
+  entries.sort((a,b)=>{
+    const wa=a[1], wb=b[1];
+    if(sortBy==='u') return wb.u-wa.u;
+    if(sortBy==='irr') return wb.irr-wa.irr;
+    if(sortBy==='cpp') return wa.cpp-wb.cpp;
+    if(sortBy==='cl') return wb.cl-wa.cl;
+    if(sortBy==='q1') return wb.q1-wa.q1;
+    return 0;
+  });
+
+  const S = window._summary;
+  let cards = `<button class="back-btn" onclick="showNational()">&#8592; All Regions</button>`;
+  entries.forEach(([clli, ws])=>{
+    const ci = S.clli_index.find(c=>c[0]===clli);
+    const name = ci?ci[1]:'';
+    const qt = ws.q1+ws.q2+ws.q3+ws.q4;
+    cards += `<div class="wc-card" onclick="loadWireCenter('${clli}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><span class="wc-clli">${clli}</span> <span class="wc-name">${name}</span></div>
+        <span style="font-size:11px;color:#64748b">${ws.cl} cl</span>
+      </div>
+      <div class="wc-stats">
+        <span>Units: <span class="val">${fmtN(ws.u)}</span></span>
+        <span>IRR: <span class="val">${ws.irr}%</span></span>
+        <span>CPP: <span class="val">${fmtD(ws.cpp)}</span></span>
+        <span>Oblg: <span class="val">${ws.ob}/${ws.cl}</span></span>
+      </div>
+      <div class="eisenhower-bar" style="margin-top:4px;height:12px">${qt?`
+        <div class="seg" style="width:${ws.q1/qt*100}%;background:${Q_COLORS.Q1}"></div>
+        <div class="seg" style="width:${ws.q2/qt*100}%;background:${Q_COLORS.Q2}"></div>
+        <div class="seg" style="width:${ws.q3/qt*100}%;background:${Q_COLORS.Q3}"></div>
+        <div class="seg" style="width:${ws.q4/qt*100}%;background:${Q_COLORS.Q4}"></div>`:''}</div>
+    </div>`;
+  });
+  document.getElementById('card-list').innerHTML = cards;
+}
+
+// ============================================================
+// L3 — Wire Center Detail
+// ============================================================
+function loadWireCenter(clli){
+  if(wcCache[clli]){
+    renderWireCenter(clli);
+    return;
+  }
+  document.getElementById('card-list').innerHTML = '<div class="loading-msg">Loading '+clli+' data...</div>';
+  const script = document.createElement('script');
+  script.src = 'data/wc/'+clli+'.js';
+  script.onerror = ()=>{ document.getElementById('card-list').innerHTML = '<div class="loading-msg">Failed to load '+clli+'</div>'; };
+  document.head.appendChild(script);
+}
+
+window._onWC = function(clli, data){
+  wcCache[clli] = data;
+  renderWireCenter(clli);
+};
+
+function renderWireCenter(clli){
+  VIEW='wc';currentWC=clli;
+  clearLayers();
+  const data = wcCache[clli];
+  document.getElementById('sort-controls').style.display='none';
+  updateBreadcrumb();
+
+  // Determine sub-region key if not loaded
+  if(!currentSR){
+    const S = window._summary;
+    const ci = S.clli_index.find(c=>c[0]===clli);
+    if(ci) currentSR = ci[2];
+  }
+
+  // Aggregate stats
+  const cls = data.clusters;
+  let totalU=0,totalA=0,totalX=0,totalCu=0,q1=0,q2=0,q3=0,q4=0;
+  let irrSum=0,irrN=0;
+  cls.forEach(c=>{
+    totalU+=c.u; totalA+=c.a; totalX+=c.x; totalCu+=c.cu;
+    if(c.irr>0){irrSum+=c.irr*c.u;irrN+=c.u}
+    if(c.q==='Q1')q1++;else if(c.q==='Q2')q2++;else if(c.q==='Q3')q3++;else q4++;
+  });
+  const avgIrr = irrN?irrSum/irrN:0;
+  const avgCpp = totalU?totalX/totalU:0;
+
+  // KPIs
+  let kpi = `<div class="kpi-grid">
+    <div class="kpi-tile blue"><div class="kpi-label">Clusters</div><div class="kpi-value">${cls.length}</div></div>
+    <div class="kpi-tile green"><div class="kpi-label">Total Units</div><div class="kpi-value">${fmtN(totalU)}</div></div>
+    <div class="kpi-tile amber"><div class="kpi-label">Avg CPP</div><div class="kpi-value">${fmtD(Math.round(avgCpp))}</div></div>
+    <div class="kpi-tile purple"><div class="kpi-label">Wtd IRR</div><div class="kpi-value">${avgIrr.toFixed(1)}%</div></div>
+    <div class="kpi-tile red"><div class="kpi-label">Total CAPEX</div><div class="kpi-value">${fmtD(totalX)}</div></div>
+    <div class="kpi-tile gray"><div class="kpi-label">Copper CIR</div><div class="kpi-value">${fmtN(totalCu)}</div></div>
+  </div>`;
+  const qt=q1+q2+q3+q4;
+  kpi += `<div class="section-title" style="padding:0">Eisenhower</div>
+  <div class="eisenhower-bar">${qt?`
+    <div class="seg" style="width:${q1/qt*100}%;background:${Q_COLORS.Q1}"></div>
+    <div class="seg" style="width:${q2/qt*100}%;background:${Q_COLORS.Q2}"></div>
+    <div class="seg" style="width:${q3/qt*100}%;background:${Q_COLORS.Q3}"></div>
+    <div class="seg" style="width:${q4/qt*100}%;background:${Q_COLORS.Q4}"></div>`:''}</div>
+  <div style="display:flex;gap:10px;font-size:11px;color:#94a3b8;margin-bottom:8px">
+    <span class="q1">&bull; Q1:${q1}</span><span class="q2">&bull; Q2:${q2}</span>
+    <span class="q3">&bull; Q3:${q3}</span><span class="q4">&bull; Q4:${q4}</span>
+  </div>`;
+
+  // Scatter plot
+  kpi += `<div class="section-title" style="padding:0">Urgency vs Value</div>
+  <canvas id="scatter-canvas" width="320" height="160"></canvas>`;
+
+  // AUI breakdown
+  const auiTot = {S:0,B:0,M:0,T:0};
+  cls.forEach(c=>{auiTot.S+=c.au.S;auiTot.B+=c.au.B;auiTot.M+=c.au.M;auiTot.T+=c.au.T});
+  const auiAll = auiTot.S+auiTot.B+auiTot.M+auiTot.T;
+  kpi += `<div class="section-title" style="padding:0">AUI Mix</div>
+  <div class="eisenhower-bar" style="height:16px">
+    <div class="seg" style="width:${auiTot.S/auiAll*100}%;background:${AUI_COLORS.SFU}" title="SFU: ${fmtN(auiTot.S)}"></div>
+    <div class="seg" style="width:${auiTot.B/auiAll*100}%;background:${AUI_COLORS.SBU}" title="SBU: ${fmtN(auiTot.B)}"></div>
+    <div class="seg" style="width:${auiTot.M/auiAll*100}%;background:${AUI_COLORS.MDU}" title="MDU: ${fmtN(auiTot.M)}"></div>
+    <div class="seg" style="width:${auiTot.T/auiAll*100}%;background:${AUI_COLORS.MTU}" title="MTU: ${fmtN(auiTot.T)}"></div>
+  </div>
+  <div style="display:flex;gap:10px;font-size:11px;color:#94a3b8;margin:4px 0 8px">
+    <span style="color:${AUI_COLORS.SFU}">&bull; SFU ${fmtN(auiTot.S)}</span>
+    <span style="color:${AUI_COLORS.SBU}">&bull; SBU ${fmtN(auiTot.B)}</span>
+    <span style="color:${AUI_COLORS.MDU}">&bull; MDU ${fmtN(auiTot.M)}</span>
+    <span style="color:${AUI_COLORS.MTU}">&bull; MTU ${fmtN(auiTot.T)}</span>
+  </div>`;
+
+  document.getElementById('kpi-section').innerHTML = kpi;
+
+  // Back button + address count
+  document.getElementById('card-list').innerHTML = `
+    <button class="back-btn" onclick="${currentSR?`loadSubRegion('${currentSR}')`:'showNational()'}">&#8592; Back</button>
+    <div style="padding:0 4px;font-size:12px;color:#64748b">${data.addrs.length.toLocaleString()} addresses loaded</div>`;
+
+  // ---- Map Layers ----
+
+  // WC boundary outline from SR cache
+  if(currentSR && srCache[currentSR]){
+    const feat = srCache[currentSR].wcs.features.find(f=>f.properties.CLLI===clli);
+    if(feat){
+      wcOutline = L.geoJSON(feat,{style:{fillOpacity:0.03,color:'#94a3b8',weight:2,dashArray:'6,4'}}).addTo(map);
+    }
+  }
+
+  // Cluster polygons
+  clusterLayer = L.layerGroup();
+  cls.forEach((c,i) => {
+    if(!c.poly || c.poly.length < 3) return;
+    const latlngs = c.poly.map(p=>[p[1],p[0]]);
+    const color = Q_COLORS[c.q]||'#6b7280';
+    const poly = L.polygon(latlngs,{fillColor:color,fillOpacity:0.25,color:color,weight:1.5,opacity:0.7});
+    poly.bindTooltip(`<b>${clli}_H${c.id}</b><br>
+      ${fmtN(c.u)} units &middot; ${c.a} addrs<br>
+      CPP $${fmtN(c.cpp)} &middot; IRR ${c.irr}%<br>
+      Urgency ${c.urg} &middot; Value ${c.val}<br>
+      ${c.q} &middot; ${c.ob}`,{sticky:true,className:'dark-tooltip'});
+    poly.on('click',()=>highlightCluster(i));
+    poly.addTo(clusterLayer);
+  });
+  clusterLayer.addTo(map);
+
+  // Address points (Canvas renderer for performance)
+  addrLayer = L.layerGroup();
+  const AM = data.aui_map||['SFU','SBU','MDU','MTU'];
+  data.addrs.forEach(a => {
+    const [lat,lon,cidx,aui,units,cpp,irr,obidx] = a;
+    const auiName = AM[aui]||'SFU';
+    const color = AUI_COLORS[auiName]||'#4895ef';
+    L.circleMarker([lat,lon],{radius:2,fillColor:color,fillOpacity:0.6,color:color,weight:0,opacity:0})
+      .addTo(addrLayer);
+  });
+  addrLayer.addTo(map);
+
+  // Fit bounds
+  const allPts = data.addrs.map(a=>[a[0],a[1]]);
+  if(allPts.length>0){
+    const bounds = L.latLngBounds(allPts);
+    map.fitBounds(bounds,{padding:[30,30]});
+  }
+
+  // Bottom panel with cluster table
+  renderClusterTable(clli, cls, data);
+
+  // Draw scatter plot after DOM update
+  setTimeout(()=>drawScatter(cls),50);
+
+  // Legend
+  document.getElementById('legend').innerHTML = `<div class="leg-title">Clusters by Quadrant</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q1}"></span> Q1 — Do First</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q2}"></span> Q2 — Schedule</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q3}"></span> Q3 — Must Do</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${Q_COLORS.Q4}"></span> Q4 — Deprioritize</div>
+    <div class="leg-title" style="margin-top:8px">Addresses by AUI</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${AUI_COLORS.SFU}"></span> SFU</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${AUI_COLORS.SBU}"></span> SBU</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${AUI_COLORS.MDU}"></span> MDU</div>
+    <div class="leg-item"><span class="leg-dot" style="background:${AUI_COLORS.MTU}"></span> MTU</div>`;
+}
+
+function highlightCluster(idx){
+  if(highlightLayer){map.removeLayer(highlightLayer);highlightLayer=null}
+  const clli = currentWC;
+  const data = wcCache[clli];
+  const c = data.clusters[idx];
+  if(!c||!c.poly||c.poly.length<3)return;
+  const latlngs = c.poly.map(p=>[p[1],p[0]]);
+  highlightLayer = L.polygon(latlngs,{fillColor:'#fff',fillOpacity:0.3,color:'#fff',weight:3}).addTo(map);
+  map.fitBounds(highlightLayer.getBounds(),{padding:[40,40]});
+  // Highlight table row
+  document.querySelectorAll('#bottom-panel tr.selected').forEach(r=>r.classList.remove('selected'));
+  const row = document.querySelector(`#bottom-panel tr[data-idx="${idx}"]`);
+  if(row){row.classList.add('selected');row.scrollIntoView({block:'nearest'})}
+}
+
+// ============================================================
+// Cluster Table
+// ============================================================
+let tableSortCol = 'u';
+let tableSortDir = -1;
+let tableData = null;
+let tableClli = null;
+let tableWcData = null;
+
+function renderClusterTable(clli, cls, wcData){
+  tableClli = clli;
+  tableData = cls;
+  tableWcData = wcData;
+  const bp = document.getElementById('bottom-panel');
+  bp.style.display = 'block';
+  drawTable();
+}
+
+function drawTable(){
+  const cls = [...tableData];
+  cls.sort((a,b)=>{
+    const av=a[tableSortCol],bv=b[tableSortCol];
+    if(typeof av==='string') return tableSortDir*av.localeCompare(bv);
+    return tableSortDir*((av||0)-(bv||0));
+  });
+
+  const bp = document.getElementById('bottom-panel');
+  const arrow = tableSortDir>0?' &#9650;':' &#9660;';
+  const cols = [
+    ['id','Cluster'],['u','Units'],['a','Addrs'],['x','CAPEX'],['cpp','CPP'],
+    ['irr','IRR'],['urg','Urgency'],['val','Value'],['q','Quad'],['ob','Obligation']
+  ];
+
+  let html = `<div class="dl-bar">
+    <button class="dl-btn" onclick="downloadCSV('clusters')">Download Clusters CSV</button>
+    <button class="dl-btn" onclick="downloadCSV('addresses')">Download Addresses CSV</button>
+  </div><table><thead><tr>`;
+  cols.forEach(([key,label])=>{
+    html += `<th onclick="sortTable('${key}')">${label}${tableSortCol===key?arrow:''}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  cls.forEach((c,i)=>{
+    const origIdx = tableData.indexOf(c);
+    const color = Q_COLORS[c.q]||'#6b7280';
+    html += `<tr data-idx="${origIdx}" onclick="highlightCluster(${origIdx})" style="cursor:pointer">
+      <td style="font-family:Consolas;color:#fff">${tableClli}_H${c.id}</td>
+      <td>${fmtN(c.u)}</td><td>${c.a}</td><td>${fmtD(c.x)}</td><td>${fmtD(c.cpp)}</td>
+      <td>${c.irr}%</td><td>${c.urg}</td><td>${c.val}</td>
+      <td style="color:${color};font-weight:600">${c.q}</td><td>${c.ob}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  bp.innerHTML = html;
+}
+
+function sortTable(col){
+  if(tableSortCol===col) tableSortDir*=-1;
+  else{tableSortCol=col;tableSortDir=-1}
+  drawTable();
+}
+
+// ============================================================
+// Scatter Plot (Urgency vs Value)
+// ============================================================
+function drawScatter(cls){
+  const canvas = document.getElementById('scatter-canvas');
+  if(!canvas)return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0,0,W,H);
+
+  // Axes
+  const pad = {l:30,r:10,t:10,b:25};
+  const pw = W-pad.l-pad.r, ph = H-pad.t-pad.b;
+
+  // Grid lines at 50
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]);
+  // Vertical at urgency=50
+  const x50 = pad.l + (50/100)*pw;
+  ctx.beginPath();ctx.moveTo(x50,pad.t);ctx.lineTo(x50,H-pad.b);ctx.stroke();
+  // Horizontal at value=50
+  const y50 = pad.t + (1-50/100)*ph;
+  ctx.beginPath();ctx.moveTo(pad.l,y50);ctx.lineTo(W-pad.r,y50);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Quadrant labels
+  ctx.font = '9px sans-serif';
+  ctx.fillStyle = '#475569';
+  ctx.fillText('Q4',pad.l+4,H-pad.b-4);
+  ctx.fillText('Q3',x50+4,H-pad.b-4);
+  ctx.fillText('Q2',pad.l+4,pad.t+12);
+  ctx.fillText('Q1',x50+4,pad.t+12);
+
+  // Points
+  cls.forEach(c => {
+    const x = pad.l + (Math.min(c.urg,100)/100)*pw;
+    const y = pad.t + (1-Math.min(c.val,100)/100)*ph;
+    const color = Q_COLORS[c.q]||'#6b7280';
+    const r = Math.max(2, Math.min(5, Math.sqrt(c.u/100)));
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  // Axis labels
+  ctx.fillStyle = '#64748b';
+  ctx.font = '10px sans-serif';
+  ctx.fillText('Urgency \u2192',W/2-20,H-4);
+  ctx.save();ctx.translate(10,H/2);ctx.rotate(-Math.PI/2);ctx.fillText('Value \u2192',0,0);ctx.restore();
+}
+
+// ============================================================
+// CSV Download
+// ============================================================
+function downloadCSV(type){
+  const clli = currentWC;
+  const data = wcCache[clli];
+  if(!data)return;
+  let csv = '';
+  if(type === 'clusters'){
+    csv = 'CLUSTER_ID,UNITS,ADDRS,CAPEX,CPP,IRR,COPPER_CIR,URGENCY,VALUE,QUADRANT,OBLIGATION,OBLIG_FRAC,SFU,SBU,MDU,MTU\n';
+    data.clusters.forEach(c => {
+      csv += `${clli}_H${c.id},${c.u},${c.a},${c.x},${c.cpp},${c.irr},${c.cu},${c.urg},${c.val},${c.q},${c.ob},${c.of},${c.au.S},${c.au.B},${c.au.M},${c.au.T}\n`;
+    });
+  } else {
+    const AM = data.aui_map||['SFU','SBU','MDU','MTU'];
+    const OM = data.oblig_map||['DISCRETIONARY'];
+    csv = 'LATITUDE,LONGITUDE,CLUSTER_ID,AUI,UNITS,CPP,IRR,OBLIGATION\n';
+    data.addrs.forEach(a => {
+      const [lat,lon,cidx,aui,units,cpp,irr,obidx] = a;
+      const cid = cidx>=0 && data.clusters[cidx] ? clli+'_H'+data.clusters[cidx].id : '';
+      csv += `${lat},${lon},${cid},${AM[aui]||''},${units},${cpp},${irr},${OM[obidx]||''}\n`;
+    });
+  }
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${clli}_${type}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// Search / Typeahead
+// ============================================================
+const searchInput = document.getElementById('clli-search');
+const searchResults = document.getElementById('search-results');
+
+searchInput.addEventListener('input', function(){
+  const q = this.value.trim().toUpperCase();
+  if(q.length < 2){searchResults.style.display='none';return}
+  const S = window._summary;
+  const matches = S.clli_index.filter(c => c[0].includes(q) || (c[1]||'').toUpperCase().includes(q)).slice(0,15);
+  if(matches.length === 0){searchResults.style.display='none';return}
+  searchResults.innerHTML = matches.map(m => `<div class="sr-item" onclick="jumpToWC('${m[0]}','${m[2]}')">
+    <div class="sr-clli">${m[0]}</div>
+    <div class="sr-info">${m[1]} &middot; ${fmtN(m[3])} units &middot; IRR ${m[4]}%</div>
+  </div>`).join('');
+  searchResults.style.display = 'block';
+});
+
+searchInput.addEventListener('blur', ()=>setTimeout(()=>{searchResults.style.display='none'},200));
+
+function jumpToWC(clli, srKey){
+  searchInput.value = '';
+  searchResults.style.display = 'none';
+  currentSR = srKey;
+  // Load SR first if needed, then WC
+  if(!srCache[srKey]){
+    const origOnSR = window._onSR;
+    window._onSR = function(key, data){
+      srCache[key] = data;
+      window._onSR = origOnSR;
+      loadWireCenter(clli);
+    };
+    const script = document.createElement('script');
+    script.src = 'data/sr/'+srKey+'.js';
+    document.head.appendChild(script);
+  } else {
+    loadWireCenter(clli);
+  }
+}
+
+// ============================================================
+// Breadcrumb
+// ============================================================
+function updateBreadcrumb(){
+  const bc = document.getElementById('nav-breadcrumb');
+  const S = window._summary;
+  let html = '<span onclick="showNational()">National</span>';
+  if(VIEW==='subregion' || VIEW==='wc'){
+    const srInfo = S.sub_regions.find(s=>s.key===currentSR);
+    if(srInfo){
+      html += ' <span class="sep">/</span> <span onclick="loadSubRegion(\''+currentSR+'\')">'+srInfo.name+'</span>';
+    }
+  }
+  if(VIEW==='wc' && currentWC){
+    html += ' <span class="sep">/</span> <span style="color:#fff;text-decoration:none;cursor:default">'+currentWC+'</span>';
+  }
+  bc.innerHTML = html;
+}
+
+// ============================================================
+// Tooltip styles (injected)
+// ============================================================
+const style = document.createElement('style');
+style.textContent = `.dark-tooltip{background:rgba(17,24,39,0.95)!important;color:#e2e8f0!important;border:1px solid #334155!important;border-radius:6px!important;font-size:12px!important;padding:6px 10px!important;line-height:1.5!important}
+.dark-tooltip .leaflet-tooltip-arrow{display:none}`;
+document.head.appendChild(style);
+
+// ============================================================
+// Init
+// ============================================================
+showNational();
+</script>
+</body>
+</html>
