@@ -1,0 +1,79 @@
+{
+    "version": "6.0",
+    "description": "NON-OFS ILEC Master Clustering Configuration",
+    "updated": "2026-04-21",
+
+    "formation_weights": {
+        "_comment": "Cluster formation scoring — geospatial + financial quality only. Obligations are NOT a formation input.",
+        "W_IRR_V2": 0.40,
+        "W_COPPER_SALVAGE": 0.25,
+        "W_BI_RANK": 0.20,
+        "W_DENSITY": 0.15
+    },
+
+    "eisenhower_urgency_weights": {
+        "_comment": "Post-formation urgency axis (0-100). Obligation tier + copper timeline + dispatch frequency.",
+        "obligation_tier": 0.50,
+        "copper_recycling_imminence": 0.30,
+        "dispatch_frequency": 0.20
+    },
+
+    "eisenhower_value_weights": {
+        "_comment": "Post-formation value axis (0-100). IRR + penetration + revenue potential.",
+        "irr_v2": 0.50,
+        "penetration_terminal": 0.25,
+        "revenue_potential": 0.25
+    },
+
+    "eisenhower_thresholds": {
+        "Q1_Do_First": {"urgency_min": 50, "value_min": 50},
+        "Q2_Schedule": {"urgency_max": 50, "value_min": 50},
+        "Q3_Must_Do": {"urgency_min": 50, "value_max": 50},
+        "Q4_Deprioritize": {"urgency_max": 50, "value_max": 50}
+    },
+
+    "obligation_tier_scores": {
+        "_comment": "Used in Eisenhower urgency axis. Higher = more urgent.",
+        "COP_2026_OBLIG": 100,
+        "COP_2026_PT": 95,
+        "COP_2027_OBLIG": 85,
+        "COP_2027_PT": 80,
+        "SBB_OBLIG": 75,
+        "SBB_PT": 70,
+        "NSI_OBLIG": 60,
+        "LFA_OBLIG": 55,
+        "WB_SC": 50,
+        "ALEXANDRIA": 50,
+        "DISCRETIONARY": 0
+    },
+
+    "cpp_methodology": {
+        "base_rates": {"SFU": 1249, "SBU": 1061, "MDU": 901, "MTU": 918},
+        "nt_multiplier": {"NT1": 1.18, "NT2": 1.35},
+        "odn_source": "GPSAA.SPHINX_FTTP_BUDGET_ACTUALS_FACT_VW_2026",
+        "odn_scaling": "needsOdn ratio per CLLI (fraction without ODN_FLAG='Y')"
+    },
+
+    "irr_methodology": {
+        "model": "V2 Penetration Ramp (logistic S-curves)",
+        "horizon": "15yr DCF",
+        "conversion_from_30yr": 0.85,
+        "source_file": "irr_all_base_addresses.csv"
+    },
+
+    "morphology_params": "See MORPHOLOGY_PARAMS in telecom_clustering_v5.py",
+
+    "ewo_rules": {
+        "immutable": true,
+        "null_commitment_date": "cd=9999 (excluded from default view)",
+        "obligation_status": ["CS", "UC"],
+        "review_status": ["AU", "RC"],
+        "min_cluster_size": 49
+    },
+
+    "refresh_cadence": {
+        "cluster_boundaries": "stable (re-cluster only on major data refresh)",
+        "score_refresh": "monthly",
+        "estimated_runtime_minutes": 15
+    }
+}
