@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NON-OFS ILEC Master Clustering — Data Dictionary & Methodology</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+    color: #1a1a1a;
+    background: #fff;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  @media print {
+    body { font-size: 12px; }
+    .page-break { page-break-before: always; }
+    .no-print { display: none !important; }
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: #fff;
+    padding: 48px 56px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: #EE0000;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-bottom: 6px;
+  }
+  .header .subtitle {
+    font-size: 15px;
+    color: #b0b0b0;
+    font-weight: 400;
+  }
+  .header .date-badge {
+    display: inline-block;
+    margin-top: 14px;
+    background: rgba(238,0,0,0.15);
+    color: #ff6666;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(238,0,0,0.3);
+  }
+  .vz-logo {
+    position: absolute;
+    top: 48px; right: 56px;
+    font-size: 32px;
+    font-weight: 800;
+    color: #EE0000;
+    letter-spacing: -1px;
+  }
+
+  /* Layout */
+  .container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 40px;
+  }
+
+  /* Sections */
+  .section {
+    margin: 44px 0;
+  }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid #EE0000;
+    display: inline-block;
+  }
+
+  /* Executive Summary */
+  .exec-summary {
+    background: #fafafa;
+    border-left: 4px solid #EE0000;
+    padding: 24px 28px;
+    border-radius: 0 8px 8px 0;
+    font-size: 15.5px;
+    color: #333;
+    line-height: 1.75;
+  }
+
+  /* Stats Cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .stat-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 22px 18px;
+    text-align: center;
+    transition: box-shadow 0.2s;
+  }
+  .stat-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #EE0000;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .stat-card .stat-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Eisenhower Grid */
+  .eisenhower-wrapper {
+    margin-top: 16px;
+    position: relative;
+  }
+  .eisenhower-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid #d0d0d0;
+    max-width: 860px;
+  }
+  .eisenhower-cell {
+    padding: 28px 24px;
+    position: relative;
+  }
+  .eisenhower-cell .quad-label {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .eisenhower-cell .quad-tag {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+  .eisenhower-cell .quad-desc {
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+  .eisenhower-cell .quad-stats {
+    display: flex;
+    gap: 20px;
+  }
+  .eisenhower-cell .quad-stats .qs-item {
+    text-align: center;
+  }
+  .eisenhower-cell .quad-stats .qs-num {
+    font-size: 22px;
+    font-weight: 800;
+    display: block;
+  }
+  .eisenhower-cell .quad-stats .qs-lbl {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.7;
+  }
+
+  /* Q1 Green */
+  .q1 { background: #e8f5e9; border-right: 1px solid #c8e6c9; border-bottom: 1px solid #c8e6c9; }
+  .q1 .quad-label, .q1 .quad-stats .qs-num { color: #2e7d32; }
+  .q1 .quad-tag { color: #388e3c; }
+  .q1 .quad-desc { color: #33691e; }
+
+  /* Q3 Orange */
+  .q3 { background: #fff3e0; border-bottom: 1px solid #ffe0b2; }
+  .q3 .quad-label, .q3 .quad-stats .qs-num { color: #e65100; }
+  .q3 .quad-tag { color: #ef6c00; }
+  .q3 .quad-desc { color: #bf360c; }
+
+  /* Q2 Blue */
+  .q2 { background: #e3f2fd; border-right: 1px solid #bbdefb; }
+  .q2 .quad-label, .q2 .quad-stats .qs-num { color: #1565c0; }
+  .q2 .quad-tag { color: #1976d2; }
+  .q2 .quad-desc { color: #0d47a1; }
+
+  /* Q4 Gray */
+  .q4 { background: #f5f5f5; }
+  .q4 .quad-label, .q4 .quad-stats .qs-num { color: #616161; }
+  .q4 .quad-tag { color: #757575; }
+  .q4 .quad-desc { color: #424242; }
+
+  .eisenhower-axis-labels {
+    margin-top: 12px;
+    max-width: 860px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .axis-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #999;
+  }
+  .axis-label-left {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    position: absolute;
+    left: -36px;
+    top: 50%;
+    margin-top: -50px;
+  }
+
+  /* Tables */
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    margin-top: 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+  }
+  table.data-table thead th {
+    background: #1a1a1a;
+    color: #fff;
+    font-weight: 700;
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 3px solid #EE0000;
+  }
+  table.data-table tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+  }
+  table.data-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  table.data-table tbody tr:hover {
+    background: #fff3f3;
+  }
+  table.data-table .col-name {
+    font-weight: 700;
+    color: #1a1a1a;
+    white-space: nowrap;
+    font-family: 'Consolas', 'SF Mono', monospace;
+    font-size: 12.5px;
+  }
+  table.data-table .col-definition {
+    color: #333;
+  }
+  table.data-table .col-source {
+    color: #666;
+    font-size: 12.5px;
+  }
+
+  /* Formation Score Table */
+  table.score-table {
+    width: 100%;
+    max-width: 780px;
+    border-collapse: collapse;
+    margin-top: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  table.score-table thead th {
+    background: #EE0000;
+    color: #fff;
+    font-weight: 700;
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  table.score-table tbody td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eee;
+  }
+  table.score-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  table.score-table tbody tr:hover {
+    background: #fff3f3;
+  }
+  .weight-bar {
+    display: inline-block;
+    height: 8px;
+    border-radius: 4px;
+    background: #EE0000;
+    vertical-align: middle;
+    margin-left: 8px;
+    opacity: 0.7;
+  }
+  .weight-text {
+    font-weight: 800;
+    color: #EE0000;
+    font-size: 15px;
+  }
+
+  /* Obligation Table */
+  table.oblig-table {
+    width: 100%;
+    max-width: 900px;
+    border-collapse: collapse;
+    margin-top: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  table.oblig-table thead th {
+    background: #1a1a1a;
+    color: #fff;
+    font-weight: 700;
+    padding: 11px 14px;
+    text-align: left;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 3px solid #EE0000;
+  }
+  table.oblig-table tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #eee;
+  }
+  table.oblig-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  table.oblig-table tbody tr:hover {
+    background: #fff3f3;
+  }
+  .bucket-tag {
+    display: inline-block;
+    font-family: 'Consolas', 'SF Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .bucket-cop2026 { background: #ffcdd2; color: #b71c1c; }
+  .bucket-cop2027 { background: #ffe0b2; color: #e65100; }
+  .bucket-copfuture { background: #fff9c4; color: #f57f17; }
+  .bucket-sbb { background: #c8e6c9; color: #1b5e20; }
+  .bucket-nsi { background: #bbdefb; color: #0d47a1; }
+  .bucket-lfa { background: #e1bee7; color: #6a1b9a; }
+  .bucket-disc { background: #f5f5f5; color: #616161; }
+
+  .pct-bar-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pct-bar {
+    display: inline-block;
+    height: 10px;
+    border-radius: 5px;
+    background: #EE0000;
+    opacity: 0.6;
+  }
+
+  /* Data Source Table */
+  table.source-table {
+    width: 100%;
+    max-width: 860px;
+    border-collapse: collapse;
+    margin-top: 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  table.source-table thead th {
+    background: #37474f;
+    color: #fff;
+    font-weight: 700;
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  table.source-table tbody td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #eee;
+  }
+  table.source-table tbody tr:nth-child(even) {
+    background: #fafafa;
+  }
+  table.source-table tbody tr:hover {
+    background: #e8f5e9;
+  }
+  .oracle-name {
+    font-family: 'Consolas', 'SF Mono', monospace;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #0d47a1;
+  }
+
+  /* Refresh Steps */
+  .refresh-steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin-top: 12px;
+    max-width: 700px;
+  }
+  .refresh-steps li {
+    counter-increment: step;
+    padding: 12px 16px 12px 52px;
+    position: relative;
+    border-left: 2px solid #e0e0e0;
+    margin-bottom: 0;
+  }
+  .refresh-steps li:last-child {
+    border-left: 2px solid transparent;
+  }
+  .refresh-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -14px;
+    top: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #EE0000;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 60px;
+    padding: 24px 0;
+    border-top: 1px solid #e0e0e0;
+    text-align: center;
+    color: #999;
+    font-size: 12px;
+  }
+  .footer strong { color: #666; }
+
+  /* Subsection */
+  .subsection-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #333;
+    margin: 28px 0 10px;
+  }
+  .formula-note {
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 14px;
+    font-size: 13.5px;
+    color: #555;
+    line-height: 1.65;
+  }
+  .formula-note strong { color: #333; }
+
+  /* TOC */
+  .toc {
+    background: #fafafa;
+    border: 1px solid #e8e8e8;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin: 32px 0;
+  }
+  .toc-title {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #999;
+    margin-bottom: 12px;
+  }
+  .toc-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 32px;
+  }
+  .toc-list li a {
+    color: #1a1a1a;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 4px 0;
+    display: inline-block;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .toc-list li a:hover {
+    color: #EE0000;
+    border-bottom-color: #EE0000;
+  }
+  .toc-list li a .toc-num {
+    color: #EE0000;
+    font-weight: 800;
+    margin-right: 6px;
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .eisenhower-grid { grid-template-columns: 1fr; }
+    .toc-list { grid-template-columns: 1fr; }
+    .container { padding: 0 20px; }
+    .header { padding: 32px 20px 28px; }
+    .vz-logo { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ HEADER -->
+<div class="header">
+  <div class="vz-logo">Verizon</div>
+  <h1>NON-OFS ILEC Master Clustering</h1>
+  <div class="subtitle">Data Dictionary & Methodology</div>
+  <div class="date-badge">Run Date: April 22, 2026</div>
+</div>
+
+<div class="container">
+
+  <!-- TOC -->
+  <nav class="toc no-print">
+    <div class="toc-title">Contents</div>
+    <ol class="toc-list">
+      <li><a href="#exec-summary"><span class="toc-num">1</span>Executive Summary</a></li>
+      <li><a href="#key-stats"><span class="toc-num">2</span>Key Statistics</a></li>
+      <li><a href="#eisenhower"><span class="toc-num">3</span>Eisenhower Quadrant Summary</a></li>
+      <li><a href="#formation"><span class="toc-num">4</span>Formation Scoring</a></li>
+      <li><a href="#obligations"><span class="toc-num">5</span>Obligation Buckets</a></li>
+      <li><a href="#eisenhower-scoring"><span class="toc-num">6</span>Eisenhower Scoring</a></li>
+      <li><a href="#table-defs"><span class="toc-num">7</span>Table Definitions</a></li>
+      <li><a href="#data-sources"><span class="toc-num">8</span>Data Sources</a></li>
+      <li><a href="#refresh"><span class="toc-num">9</span>Monthly Refresh</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============================================================ 1. EXEC SUMMARY -->
+  <div class="section" id="exec-summary">
+    <div class="section-title">1. Executive Summary</div>
+    <div class="exec-summary">
+      This analysis clusters every NON-OFS address in the Verizon ILEC footprint &mdash; <strong>12.26 million addresses</strong> representing <strong>15.9 million premises</strong> across <strong>2,078 wire centers</strong> &mdash; into <strong>68,071 geographically contiguous, build-ready hubs</strong> using road-graph connectivity and a four-component financial quality model. Each hub is then scored on two independent axes &mdash; <em>Urgency</em> (obligation pressure, copper retirement imminence, dispatch frequency) and <em>Value</em> (IRR, penetration, revenue potential) &mdash; producing a 2&times;2 Eisenhower prioritization matrix. The result is a single, repeatable framework for answering <strong>"where should we build next?"</strong> by balancing financial return with regulatory and operational urgency. Obligation tagging is decoupled from cluster formation so that monthly score refreshes never require re-clustering.
+    </div>
+  </div>
+
+  <!-- ============================================================ 2. KEY STATISTICS -->
+  <div class="section" id="key-stats">
+    <div class="section-title">2. Key Statistics</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-value">12.26M</span>
+        <span class="stat-label">Addresses</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">15.9M</span>
+        <span class="stat-label">Total Units</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">2,078</span>
+        <span class="stat-label">Wire Centers</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">68,071</span>
+        <span class="stat-label">Clusters</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value">26.6%</span>
+        <span class="stat-label">Obligated</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 3. EISENHOWER QUADRANTS -->
+  <div class="section" id="eisenhower">
+    <div class="section-title">3. Eisenhower Quadrant Summary</div>
+    <p style="color:#666; margin-bottom:14px; font-size:14px;">Clusters scored on two independent 0&ndash;100 axes: <strong>Urgency</strong> (obligation &amp; operational pressure) and <strong>Value</strong> (financial return). Threshold at 50 on each axis.</p>
+
+    <div class="eisenhower-wrapper" style="position:relative; padding-left: 44px;">
+      <div class="axis-label axis-label-left" style="position:absolute; left:4px; top:50%; transform: rotate(180deg); writing-mode:vertical-lr; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:#999; margin-top:-40px;">Urgency</div>
+      <div class="eisenhower-grid">
+        <!-- Row 1: Urgency >= 50 -->
+        <div class="eisenhower-cell q1">
+          <div class="quad-tag">Urgent + Valuable</div>
+          <div class="quad-label">Q1 &mdash; Do First</div>
+          <div class="quad-desc">Build immediately: high financial return AND obligation/operational pressure. These clusters deliver the best ROI while meeting regulatory commitments.</div>
+          <div class="quad-stats">
+            <div class="qs-item"><span class="qs-num">6,651</span><span class="qs-lbl">Clusters</span></div>
+            <div class="qs-item"><span class="qs-num">1.1M</span><span class="qs-lbl">Units</span></div>
+          </div>
+        </div>
+        <div class="eisenhower-cell q3">
+          <div class="quad-tag">Urgent, Less Valuable</div>
+          <div class="quad-label">Q3 &mdash; Must Do</div>
+          <div class="quad-desc">Obligation-driven but lower returns. Build to meet copper retirement and regulatory commitments regardless of economics.</div>
+          <div class="quad-stats">
+            <div class="qs-item"><span class="qs-num">1,039</span><span class="qs-lbl">Clusters</span></div>
+            <div class="qs-item"><span class="qs-num">98K</span><span class="qs-lbl">Units</span></div>
+          </div>
+        </div>
+        <!-- Row 2: Urgency < 50 -->
+        <div class="eisenhower-cell q2">
+          <div class="quad-tag">Valuable, Not Urgent</div>
+          <div class="quad-label">Q2 &mdash; Schedule</div>
+          <div class="quad-desc">Economically attractive with no near-term obligation pressure. Schedule into the build plan ordered by ROI.</div>
+          <div class="quad-stats">
+            <div class="qs-item"><span class="qs-num">44,525</span><span class="qs-lbl">Clusters</span></div>
+            <div class="qs-item"><span class="qs-num">11.1M</span><span class="qs-lbl">Units</span></div>
+          </div>
+        </div>
+        <div class="eisenhower-cell q4">
+          <div class="quad-tag">Low Return, No Urgency</div>
+          <div class="quad-label">Q4 &mdash; Deprioritize</div>
+          <div class="quad-desc">Low financial return and no obligation. Defer or evaluate selectively for future consideration.</div>
+          <div class="quad-stats">
+            <div class="qs-item"><span class="qs-num">15,856</span><span class="qs-lbl">Clusters</span></div>
+            <div class="qs-item"><span class="qs-num">3.5M</span><span class="qs-lbl">Units</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="eisenhower-axis-labels" style="padding-left:0;">
+        <span class="axis-label" style="color:#2e7d32;">&#9650; Value &ge; 50</span>
+        <span class="axis-label" style="color:#999;">Value &lt; 50 &#9660;</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ 4. FORMATION SCORING -->
+  <div class="section" id="formation">
+    <div class="section-title">4. Formation Scoring</div>
+    <p style="color:#555; margin-bottom:14px; font-size:14px;">Each address receives a composite financial quality score (0&ndash;100) that determines seed priority during cluster formation and growth order during hub expansion.</p>
+
+    <table class="score-table">
+      <thead>
+        <tr>
+          <th style="width:200px;">Component</th>
+          <th style="width:80px;">Weight</th>
+          <th>What It Measures</th>
+          <th style="width:240px;">Normalization</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>IRR V2</strong></td>
+          <td><span class="weight-text">40%</span><span class="weight-bar" style="width:80px;"></span></td>
+          <td>15-year internal rate of return from V2 penetration ramp model</td>
+          <td>Min-max within wire center; higher = better</td>
+        </tr>
+        <tr>
+          <td><strong>Copper Salvage</strong></td>
+          <td><span class="weight-text">25%</span><span class="weight-bar" style="width:50px;"></span></td>
+          <td>Estimated recoverable value of existing copper plant</td>
+          <td>copper_circuits &times; $200/circuit, normalized to WC max</td>
+        </tr>
+        <tr>
+          <td><strong>BI Priority Rank</strong></td>
+          <td><span class="weight-text">20%</span><span class="weight-bar" style="width:40px;"></span></td>
+          <td>BI composite rank (dispatch, sales propensity, geographic synergy)</td>
+          <td>Inverted min-max (lower rank = higher score)</td>
+        </tr>
+        <tr>
+          <td><strong>Unit Density</strong></td>
+          <td><span class="weight-text">15%</span><span class="weight-bar" style="width:30px;"></span></td>
+          <td>MDU/MTU density bonus</td>
+          <td>min(units / 10, 1.0) &mdash; caps at 10+ units</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="formula-note">
+      <strong>Design principle:</strong> IRR dominates because it directly measures build economics. Copper salvage is second because it represents both financial recovery and an operational imperative. BI rank captures operational synergies not embedded in IRR. Density rewards MDU/MTU cost efficiency.<br><br>
+      <strong>Why obligations are excluded from formation:</strong> Obligations change (new mandates, date shifts, scope changes) but cluster boundaries should remain stable. Separating obligation tagging from formation means monthly score refreshes never require re-clustering.
+    </div>
+
+    <div class="subsection-title" style="margin-top:28px;">Clustering Algorithm (6 Phases)</div>
+    <table class="score-table" style="max-width:100%;">
+      <thead>
+        <tr><th style="width:50px;">Phase</th><th style="width:200px;">Step</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td style="text-align:center; font-weight:800; color:#EE0000;">1</td><td><strong>Formation Scoring</strong></td><td>Score every address using the 4-component formula above</td></tr>
+        <tr><td style="text-align:center; font-weight:800; color:#EE0000;">2</td><td><strong>Road-Group Construction</strong></td><td>Snap addresses to nearest TIGER road segment; group by connected road segments</td></tr>
+        <tr><td style="text-align:center; font-weight:800; color:#EE0000;">3</td><td><strong>Adjacency Graph</strong></td><td>Build graph of physically adjacent road groups (within morphology-specific radius caps)</td></tr>
+        <tr><td style="text-align:center; font-weight:800; color:#EE0000;">4</td><td><strong>Seed &amp; Grow</strong></td><td>Highest-scored road groups become hub seeds; adjacent groups merge via growth scoring (financial 35%, proximity 25%, IRR gravity 25%, street affinity 15%)</td></tr>
+        <tr><td style="text-align:center; font-weight:800; color:#EE0000;">5</td><td><strong>Size Enforcement</strong></td><td>Split oversized hubs, merge undersized ones. Targets: 150&ndash;450 units suburban, 400&ndash;700 urban, 50&ndash;200 rural</td></tr>
+        <tr><td style="text-align:center; font-weight:800; color:#EE0000;">6</td><td><strong>Finalize</strong></td><td>Assign hub IDs ({CLLI}_H{nnn}), compute centroids, build output records</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ 5. OBLIGATION BUCKETS -->
+  <div class="section page-break" id="obligations">
+    <div class="section-title">5. Obligation Buckets</div>
+    <p style="color:#555; margin-bottom:14px; font-size:14px;">Each address is tagged with exactly one obligation bucket. Priority-ordered &mdash; first match wins. 26.6% of addresses carry an obligation; 73.4% are discretionary.</p>
+
+    <table class="oblig-table">
+      <thead>
+        <tr>
+          <th style="width:60px;">Priority</th>
+          <th style="width:170px;">Bucket</th>
+          <th>Definition</th>
+          <th style="width:110px; text-align:right;">Count</th>
+          <th style="width:100px; text-align:right;">Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:center; font-weight:800;">1</td>
+          <td><span class="bucket-tag bucket-cop2026">COP_2026_OBLIG</span></td>
+          <td>Address in planned copper recycling area with start date in 2026. Fiber must be built before copper is retired.</td>
+          <td style="text-align:right; font-weight:700;">496,908</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:41px;"></span> 4.1%</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:center; font-weight:800;">2</td>
+          <td><span class="bucket-tag bucket-cop2027">COP_2027_OBLIG</span></td>
+          <td>Copper recycling start date in 2027.</td>
+          <td style="text-align:right; font-weight:700;">386,214</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:31px;"></span> 3.1%</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:center; font-weight:800;">3</td>
+          <td><span class="bucket-tag bucket-copfuture">COP_FUTURE_OBLIG</span></td>
+          <td>Copper recycling planned but start date is 2028+.</td>
+          <td style="text-align:right; font-weight:700;">14,385</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:2px;"></span> 0.1%</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:center; font-weight:800;">4</td>
+          <td><span class="bucket-tag bucket-sbb">SBB_OBLIG</span></td>
+          <td>State broadband obligation area (state-level grant or regulatory commitment).</td>
+          <td style="text-align:right; font-weight:700;">2,344,904</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:100px;"></span> 19.1%</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:center; font-weight:800;">5</td>
+          <td><span class="bucket-tag bucket-nsi">NSI_OBLIG</span></td>
+          <td>National Security Interest inquiry match via NTAS bridge table.</td>
+          <td style="text-align:right; font-weight:700;">20,280</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:2px;"></span> 0.2%</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:center; font-weight:800;">6</td>
+          <td><span class="bucket-tag bucket-lfa">LFA_OBLIG</span></td>
+          <td>Local Franchise Authority obligation area (currently unpopulated for NON-OFS).</td>
+          <td style="text-align:right; font-weight:700;">0</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:0px;"></span> 0.0%</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:center; font-weight:800;">7</td>
+          <td><span class="bucket-tag bucket-disc">DISCRETIONARY</span></td>
+          <td>No external obligation &mdash; build decision is purely economic.</td>
+          <td style="text-align:right; font-weight:700;">8,999,471</td>
+          <td style="text-align:right;">
+            <div class="pct-bar-container"><span class="pct-bar" style="width:100px; background:#999;"></span> 73.4%</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ 6. EISENHOWER SCORING -->
+  <div class="section" id="eisenhower-scoring">
+    <div class="section-title">6. Eisenhower Scoring</div>
+    <p style="color:#555; margin-bottom:18px; font-size:14px;">Each cluster is scored on two independent 0&ndash;100 axes, then assigned to a quadrant based on a threshold of 50 on each axis.</p>
+
+    <div class="subsection-title">Urgency Score (0&ndash;100) &mdash; "How pressing is the need to build?"</div>
+    <table class="score-table" style="max-width:100%;">
+      <thead>
+        <tr>
+          <th style="width:220px;">Component</th>
+          <th style="width:80px;">Weight</th>
+          <th>What It Measures</th>
+          <th style="width:280px;">Scoring</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Obligation Tier</strong></td>
+          <td><span class="weight-text">50%</span></td>
+          <td>Highest obligation bucket present in the cluster</td>
+          <td>COP_2026=100, COP_2027=80, COP_FUTURE=60, SBB=70, NSI=50, LFA=40, DISC=0</td>
+        </tr>
+        <tr>
+          <td><strong>Copper Recycling Imminence</strong></td>
+          <td><span class="weight-text">30%</span></td>
+          <td>% of addresses with copper retirement date in 2026&ndash;2027</td>
+          <td>Linear: 0% &rarr; 0, 100% &rarr; 100</td>
+        </tr>
+        <tr>
+          <td><strong>Dispatch Frequency</strong></td>
+          <td><span class="weight-text">20%</span></td>
+          <td>Average truck rolls per address in past 12 months</td>
+          <td>min(avg_dispatch &times; 20, 100) &mdash; 5+ dispatches/yr = 100</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="subsection-title" style="margin-top:28px;">Value Score (0&ndash;100) &mdash; "How financially attractive is this cluster?"</div>
+    <table class="score-table" style="max-width:100%;">
+      <thead>
+        <tr>
+          <th style="width:220px;">Component</th>
+          <th style="width:80px;">Weight</th>
+          <th>What It Measures</th>
+          <th style="width:280px;">Scoring</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>IRR V2</strong></td>
+          <td><span class="weight-text">50%</span></td>
+          <td>Average 15-year IRR across cluster</td>
+          <td>0% &rarr; 0, 15% &rarr; 50, 30%+ &rarr; 100 (linear)</td>
+        </tr>
+        <tr>
+          <td><strong>Terminal Penetration</strong></td>
+          <td><span class="weight-text">25%</span></td>
+          <td>Average projected FiOS take rate at steady state</td>
+          <td>min(pen &times; 200, 100) &mdash; 50%+ terminal = 100</td>
+        </tr>
+        <tr>
+          <td><strong>Revenue Potential</strong></td>
+          <td><span class="weight-text">25%</span></td>
+          <td>Average annual EBITDA per address</td>
+          <td>min(ebitda / $500, 100) &mdash; $500+/yr = 100</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ 7. TABLE DEFINITIONS -->
+  <div class="section page-break" id="table-defs">
+    <div class="section-title">7. Table Definitions</div>
+
+    <!-- CLUSTER_ASSIGNMENT_MASTER -->
+    <div class="subsection-title">CLUSTER_ASSIGNMENT_MASTER <span style="font-weight:400; color:#888; font-size:13px;">&mdash; 12,262,162 rows (address-level). PK: (LOCUS_ADDRESS_ID, RUN_DATE)</span></div>
+    <table class="data-table">
+      <thead>
+        <tr><th style="width:200px;">Column</th><th>Definition</th><th style="width:280px;">Source / Calculation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-name">LOCUS_ADDRESS_ID</td><td class="col-definition">Unique address identifier</td><td class="col-source">GPSAA.G_ALL_LOCUS_ADDRESS_KEY</td></tr>
+        <tr><td class="col-name">CLUSTER_ID</td><td class="col-definition">Hub assignment (format: {CLLI}_H{nnn})</td><td class="col-source">Clustering algorithm output</td></tr>
+        <tr><td class="col-name">CLLI</td><td class="col-definition">Wire center code (8-char)</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">REGION</td><td class="col-definition">Verizon operating region (e.g., NE Metro, Potomac, Tri-State)</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">SUB_REGION</td><td class="col-definition">Sub-region within region</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">STATE</td><td class="col-definition">Two-letter state code</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">MARKET_DENSITY</td><td class="col-definition">Morphology tier (10 tiers: ULTRADENSE-URBAN to ULTRA-RURAL)</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">AUI</td><td class="col-definition">Address Use Indicator &mdash; SFU, SBU, MDU, MTU</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">NO_OF_UNITS</td><td class="col-definition">NTAS unit count. MDU/MTU may have 2&ndash;500+ units. Defaults to 1 if null.</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">LATITUDE / LONGITUDE</td><td class="col-definition">WGS84 coordinates</td><td class="col-source">G_ALL_LOCUS_ADDRESS_KEY</td></tr>
+        <tr><td class="col-name">CPO_NTAS</td><td class="col-definition">Cost Per Opportunity &mdash; NTAS level. BI-predicted cost per unit (sub-location).</td><td class="col-source">GPS_MODELS.COST_MODEL_BASE_ADDR_NON_OFS via BI</td></tr>
+        <tr><td class="col-name">CPO_PRED</td><td class="col-definition">Cost Per Opportunity &mdash; Predicted at address level (not sub-location).</td><td class="col-source">Same source as CPO_NTAS</td></tr>
+        <tr><td class="col-name">TOTAL_CAPEX</td><td class="col-definition">Total estimated capital expenditure including CO overhead allocation.</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">COMPUTED_IRR</td><td class="col-definition">15-year IRR. V2 ramp model with year-by-year S-curve revenue. Mean 14.3%, Median 11.0%.</td><td class="col-source">irr_v2_ramp_computation.py (30yr DCF &times; 0.85)</td></tr>
+        <tr><td class="col-name">PEN_TERMINAL</td><td class="col-definition">Terminal penetration rate. Urban ~41%, Suburban ~54%, Rural ~57%.</td><td class="col-source">V2 Penetration Ramp Model</td></tr>
+        <tr><td class="col-name">AVG_ANNUAL_EBITDA</td><td class="col-definition">Average annual EBITDA contribution over model period.</td><td class="col-source">BI scoring (penetration &times; ARPU &minus; OpEx)</td></tr>
+        <tr><td class="col-name">IRR_BUCKET</td><td class="col-definition">IRR tier: &lt;0%, 0&ndash;5%, 5&ndash;10%, 10&ndash;15%, 15&ndash;20%, 20%+</td><td class="col-source">BI scoring</td></tr>
+        <tr><td class="col-name">NT_TYPE</td><td class="col-definition">NT1 (existing plant, 1.18&times; mult) or NT2 (new build, 1.35&times; mult)</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">ODN_FLAG</td><td class="col-definition">Whether address requires ODN construction</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">COPPER_CIR_COUNT</td><td class="col-definition">Active copper circuits at this address</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">COPPER_CUST_COUNT</td><td class="col-definition">Copper customers at this address</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">DISPATCH_1YR</td><td class="col-definition">Truck roll / dispatch count in past 12 months</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">OBLIGATION_BUCKET</td><td class="col-definition">Regulatory/strategic obligation classification (first match wins)</td><td class="col-source">See Obligation Buckets section</td></tr>
+        <tr><td class="col-name">PRIORITY_RANK</td><td class="col-definition">BI composite priority rank (lower = higher priority)</td><td class="col-source">BI scoring table</td></tr>
+        <tr><td class="col-name">FORMATION_SCORE</td><td class="col-definition">Financial quality score used during cluster formation (0&ndash;100)</td><td class="col-source">See Formation Scoring section</td></tr>
+        <tr><td class="col-name">RUN_DATE</td><td class="col-definition">Date this data was generated. Enables monthly partitioned refreshes.</td><td class="col-source">Pipeline run date</td></tr>
+      </tbody>
+    </table>
+
+    <!-- CLUSTER_SUMMARY_MASTER -->
+    <div class="subsection-title" style="margin-top:36px;">CLUSTER_SUMMARY_MASTER <span style="font-weight:400; color:#888; font-size:13px;">&mdash; 68,071 rows (cluster-level). PK: (CLUSTER_ID, RUN_DATE)</span></div>
+    <table class="data-table">
+      <thead>
+        <tr><th style="width:210px;">Column</th><th>Definition</th><th style="width:280px;">Source / Calculation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-name">CLUSTER_ID</td><td class="col-definition">Unique cluster identifier. Format: {CLLI}_H{nnn} (e.g., NWRKNJMD_H003).</td><td class="col-source">Clustering algorithm</td></tr>
+        <tr><td class="col-name">CLLI</td><td class="col-definition">Wire center code</td><td class="col-source">Inherited from member addresses</td></tr>
+        <tr><td class="col-name">REGION / SUB_REGION</td><td class="col-definition">Operating region and sub-region</td><td class="col-source">Inherited from member addresses</td></tr>
+        <tr><td class="col-name">MARKET_DENSITY</td><td class="col-definition">Predominant morphology of the cluster</td><td class="col-source">Inherited from first address</td></tr>
+        <tr><td class="col-name">CENTROID_LAT / CENTROID_LON</td><td class="col-definition">Geographic center of the cluster</td><td class="col-source">Mean of hub centroid coordinates</td></tr>
+        <tr><td class="col-name">TOTAL_UNITS</td><td class="col-definition">Sum of NO_OF_UNITS across all member addresses</td><td class="col-source">Direct sum</td></tr>
+        <tr><td class="col-name">TOTAL_ADDRS</td><td class="col-definition">Count of distinct addresses in the cluster</td><td class="col-source">Count of LOCUS_ADDRESS_IDs</td></tr>
+        <tr><td class="col-name">TOTAL_CAPEX</td><td class="col-definition">Sum of TOTAL_CAPEX across all member addresses</td><td class="col-source">Direct sum, rounded to nearest dollar</td></tr>
+        <tr><td class="col-name">AVG_CPP</td><td class="col-definition">Average Cost Per Premises = TOTAL_CAPEX / TOTAL_UNITS. Key efficiency metric.</td><td class="col-source">TOTAL_CAPEX / TOTAL_UNITS</td></tr>
+        <tr><td class="col-name">MEDIAN_IRR</td><td class="col-definition">Median COMPUTED_IRR of member addresses (excludes zeros)</td><td class="col-source">Sorted middle value of non-zero IRRs</td></tr>
+        <tr><td class="col-name">COPPER_CIRCUITS</td><td class="col-definition">Total copper circuits across all member addresses</td><td class="col-source">Sum of COPPER_CIR_COUNT</td></tr>
+        <tr><td class="col-name">URGENCY_SCORE</td><td class="col-definition">Urgency axis (0&ndash;100): how pressing is the need to build?</td><td class="col-source">See Eisenhower Scoring</td></tr>
+        <tr><td class="col-name">VALUE_SCORE</td><td class="col-definition">Value axis (0&ndash;100): how financially attractive is this cluster?</td><td class="col-source">See Eisenhower Scoring</td></tr>
+        <tr><td class="col-name">BUILD_PRIORITY_TIER</td><td class="col-definition">Eisenhower quadrant: Q1_Do_First, Q2_Schedule, Q3_Must_Do, Q4_Deprioritize</td><td class="col-source">Urgency/Value thresholds at 50</td></tr>
+        <tr><td class="col-name">TOP_OBLIGATION</td><td class="col-definition">Highest-priority obligation bucket in the cluster</td><td class="col-source">First non-DISCRETIONARY bucket in priority order</td></tr>
+        <tr><td class="col-name">OBLIGATION_FRACTION</td><td class="col-definition">Fraction of cluster addresses carrying any obligation (0.0&ndash;1.0)</td><td class="col-source">(total &minus; discretionary) / total</td></tr>
+        <tr><td class="col-name">AVG_FORMATION_SCORE</td><td class="col-definition">Mean financial quality score of member addresses (0&ndash;100)</td><td class="col-source">Average of per-address FORMATION_SCORE</td></tr>
+        <tr><td class="col-name">AUI_SFU / SBU / MDU / MTU</td><td class="col-definition">Unit count by Address Use Indicator type</td><td class="col-source">Sum of units by AUI within cluster</td></tr>
+        <tr><td class="col-name">OBLIGATION_FILL</td><td class="col-definition">Detailed breakdown of obligation buckets (pipe-delimited)</td><td class="col-source">e.g., COP_2026_OBLIG:42|SBB_OBLIG:118|DISCRETIONARY:340</td></tr>
+        <tr><td class="col-name">RUN_DATE</td><td class="col-definition">Partition date</td><td class="col-source">Pipeline run date</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ 8. DATA SOURCES -->
+  <div class="section" id="data-sources">
+    <div class="section-title">8. Data Sources</div>
+    <table class="source-table">
+      <thead>
+        <tr><th style="width:360px;">Oracle Table</th><th>What It Provides</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="oracle-name">GPSAA.S_BEYOND_INFINITY_RANKING_SCORING</span></td>
+          <td>Address-level BI scoring: CPO, IRR, penetration, EBITDA, dispatch, copper, AUI, market density</td>
+        </tr>
+        <tr>
+          <td><span class="oracle-name">GPSAA.G_ALL_LOCUS_ADDRESS_KEY</span></td>
+          <td>Address master: LOCUS_ADDRESS_ID, coordinates, CLLI, CATEGORY, CENSUSBLOCKID</td>
+        </tr>
+        <tr>
+          <td><span class="oracle-name">GPSAA.NTAS_LOCUS_MAP</span></td>
+          <td>Bridge table: maps NTAS ADDRESS_ID to LOCUS_ADDRESS_ID</td>
+        </tr>
+        <tr>
+          <td><span class="oracle-name">NSEEPRD.NSI_INQUIRIES</span></td>
+          <td>National Security Interest inquiries (ADDRESS_ID)</td>
+        </tr>
+        <tr>
+          <td><span class="oracle-name">GPSAA.EWO_W_CMTDATE_NODUP_PIPELINE_2026</span></td>
+          <td>EWO pipeline addresses with commitment dates</td>
+        </tr>
+        <tr>
+          <td><span class="oracle-name">US Census TIGER/Line</span></td>
+          <td>Road network geometry for 178 counties (road-graph clustering input)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ 9. MONTHLY REFRESH -->
+  <div class="section" id="refresh">
+    <div class="section-title">9. Monthly Refresh Process</div>
+    <p style="color:#555; margin-bottom:14px; font-size:14px;">Run <code style="background:#f5f5f5; padding:2px 8px; border-radius:4px; font-size:13px; border:1px solid #e0e0e0;">monthly_refresh.py</code> to update scores without re-clustering. Cluster boundaries remain stable &mdash; only scores and tags change.</p>
+
+    <ol class="refresh-steps">
+      <li><strong>Re-extract address data</strong> &mdash; Pull updated BI scores from Oracle (IRR, EBITDA, dispatch, copper counts)</li>
+      <li><strong>Re-tag obligations</strong> &mdash; Apply updated copper recycling dates, SBB flags, and NSI matches</li>
+      <li><strong>Re-score Eisenhower matrix</strong> &mdash; Recompute urgency and value scores for each cluster</li>
+      <li><strong>Regenerate polygon metadata</strong> &mdash; Update attributes on existing geometry (geometry unchanged)</li>
+      <li><strong>Write Oracle tables</strong> &mdash; Insert new <code style="background:#f5f5f5; padding:1px 6px; border-radius:3px; font-size:12px;">RUN_DATE</code> partition into CLUSTER_ASSIGNMENT_MASTER and CLUSTER_SUMMARY_MASTER</li>
+    </ol>
+
+    <div class="formula-note" style="margin-top:18px;">
+      <strong>Dry run:</strong> Use <code style="background:#eee; padding:2px 6px; border-radius:3px;">--dry-run</code> to score without writing to Oracle. Useful for validation before production refresh.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <strong>Verizon Broadband Strategy &amp; Engineering</strong> &mdash; NON-OFS ILEC Master Clustering &mdash; Generated April 22, 2026<br>
+    Oracle: <code>TABLEAU_USER.CLUSTER_ASSIGNMENT_MASTER</code> &amp; <code>TABLEAU_USER.CLUSTER_SUMMARY_MASTER</code>
+  </div>
+</div>
+
+</body>
+</html>
