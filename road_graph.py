@@ -15,6 +15,12 @@ from collections import defaultdict
 # Snap tolerance: max distance (ft) from address to road to be considered "on" that road
 SNAP_TOLERANCE_FT = 500
 
+# Highway MTFCC codes that act as cluster barriers
+# S1100=Interstate, S1200=US/State Highway, S1630=Ramp
+HIGHWAY_BARRIER_MTFCC = {'S1100', 'S1200', 'S1630'}
+# Rural uses same set — state highways ARE major barriers in rural areas
+HIGHWAY_BARRIER_MTFCC_RURAL = {'S1100', 'S1200'}
+
 def haversine_ft(lat1, lon1, lat2, lon2):
     R = 20902231
     dlat = math.radians(lat2 - lat1)
@@ -89,8 +95,17 @@ class RoadGraph:
         skipped_bbox = 0
 
         for idx, feat in enumerate(gj.get("features", [])):
-            name = feat["properties"].get("FULLNAME", "")
-            mtfcc = feat["properties"].get("MTFCC", "")
+            fullname_raw = feat["properties"].get("FULLNAME", "")
+            # TIGER DBF field-shift bug: MTFCC is embedded in FULLNAME
+            # Two patterns: "MS1400 ..." (offset 1) or "S1400 ..." (offset 0)
+            mtfcc = ""
+            if len(fullname_raw) >= 6 and fullname_raw[1:3] == 'S1':
+                mtfcc = fullname_raw[1:6]  # e.g., "MS1400..." -> "S1400"
+            elif len(fullname_raw) >= 5 and fullname_raw[0:2] == 'S1':
+                mtfcc = fullname_raw[0:5]  # e.g., "S1400..." -> "S1400"
+            if not mtfcc:
+                mtfcc = feat["properties"].get("MTFCC", "")
+            name = fullname_raw  # keep original for road grouping (consistent per road)
             coords = feat["geometry"].get("coordinates", [])
 
             if not coords or len(coords) < 2:
@@ -322,9 +337,84 @@ class RoadGraph:
         for rid in self.roads:
             groups[find(rid)].add(rid)
 
+        # ── Highway barrier split ─────────────────────────────────────────────
+        # If classify_barriers() has been called, split road groups that span
+        # both sides of a highway.  A "barrier node" is any node incident to a
+        # barrier road (highway intersection).  Within each group we BFS only
+        # through non-barrier nodes; disconnected components become new groups.
+        split_count = 0
+        if hasattr(self, 'barrier_road_ids') and self.barrier_road_ids:
+            barrier_nodes = set()
+            for rid in self.barrier_road_ids:
+                r = self.roads.get(rid)
+                if r:
+                    barrier_nodes.add(r['start_node'])
+                    barrier_nodes.add(r['end_node'])
+
+            # Build per-road node list (non-barrier nodes only) for fast lookup
+            road_nonbarrier_nodes = {}
+            for rid, r in self.roads.items():
+                nodes = set()
+                if r['start_node'] not in barrier_nodes:
+                    nodes.add(r['start_node'])
+                if r['end_node'] not in barrier_nodes:
+                    nodes.add(r['end_node'])
+                road_nonbarrier_nodes[rid] = nodes
+
+            new_groups = {}
+            next_gid_split = 0
+            for root, members in groups.items():
+                if len(members) <= 1:
+                    new_groups[next_gid_split] = members
+                    next_gid_split += 1
+                    continue
+
+                # Build within-group adjacency via shared non-barrier nodes
+                node_to_roads = defaultdict(set)
+                for rid in members:
+                    for nid in road_nonbarrier_nodes.get(rid, set()):
+                        node_to_roads[nid].add(rid)
+
+                local_adj = defaultdict(set)
+                for nid, rids in node_to_roads.items():
+                    rids_list = list(rids)
+                    for i in range(len(rids_list)):
+                        for j in range(i + 1, len(rids_list)):
+                            local_adj[rids_list[i]].add(rids_list[j])
+                            local_adj[rids_list[j]].add(rids_list[i])
+
+                # BFS connected components within group
+                visited = set()
+                components = []
+                for rid in members:
+                    if rid in visited:
+                        continue
+                    comp = set()
+                    queue = [rid]
+                    visited.add(rid)
+                    while queue:
+                        cur = queue.pop()
+                        comp.add(cur)
+                        for nb in local_adj.get(cur, set()):
+                            if nb not in visited and nb in members:
+                                visited.add(nb)
+                                queue.append(nb)
+                    components.append(comp)
+
+                if len(components) > 1:
+                    split_count += 1
+                for comp in components:
+                    new_groups[next_gid_split] = comp
+                    next_gid_split += 1
+
+            groups = new_groups
+            if split_count > 0:
+                print(f"    Highway barrier splits: {split_count} groups split "
+                      f"into {len(groups)} total")
+
         # Assign group_id to each road
         group_map = {}
-        for gid, (root, members) in enumerate(sorted(groups.items())):
+        for gid, members in sorted(groups.items()):
             for rid in members:
                 group_map[rid] = gid
 
@@ -332,7 +422,7 @@ class RoadGraph:
             r['group_id'] = group_map.get(rid, rid)
 
         n_groups = len(groups)
-        largest = max(len(v) for v in groups.values())
+        largest = max(len(v) for v in groups.values()) if groups else 0
         print(f"    Road groups: {n_groups} (largest: {largest} roads)")
         return groups, group_map
 
@@ -500,6 +590,88 @@ class RoadGraph:
 
         return groups
 
+    def load_copper_cable(self, csv_path):
+        """Load copper cable segments and build road-group adjacency from them.
+
+        Each cable segment endpoint is snapped to the nearest road group.
+        Two road groups connected by copper cable become copper-adjacent.
+
+        Stores self.copper_adj: {(gid_a, gid_b): total_pairs}
+        """
+        import csv as csv_mod
+        self.copper_adj = {}
+        self.copper_segments = []
+
+        try:
+            with open(csv_path) as f:
+                reader = csv_mod.DictReader(f)
+                for row in reader:
+                    flat = float(row['FROM_LATITUDE'])
+                    flon = float(row['FROM_LONGITUDE'])
+                    tlat = float(row['TO_LATITUDE'])
+                    tlon = float(row['TO_LONGITUDE'])
+                    qty = int(float(row.get('QUANTITY', 0) or 0))
+                    self.copper_segments.append((flat, flon, tlat, tlon, qty))
+        except Exception as e:
+            print(f"    Copper cable: failed to load {csv_path}: {e}")
+            return
+
+        if not self.copper_segments:
+            print(f"    Copper cable: 0 segments")
+            return
+
+        # Snap each endpoint to nearest road by centroid distance (fast)
+        def snap_to_group(lat, lon):
+            best_gid = -1
+            best_d = float('inf')
+            for rid, r in self.roads.items():
+                d = (lat - r['lat'])**2 + (lon - r['lon'])**2
+                if d < best_d:
+                    best_d = d
+                    best_gid = r.get('group_id', -1)
+            return best_gid
+
+        # Build a simple spatial lookup for road groups by centroid
+        # (reuse road centroids, much faster than per-segment snapping)
+        from collections import defaultdict as _dd
+        grid_res = 0.005
+        group_grid = _dd(list)
+        for rid, r in self.roads.items():
+            row = int(r['lat'] / grid_res)
+            col = int(r['lon'] / grid_res)
+            group_grid[(row, col)].append((rid, r['lat'], r['lon'],
+                                           r.get('group_id', -1)))
+
+        def snap_to_group_fast(lat, lon):
+            row = int(lat / grid_res)
+            col = int(lon / grid_res)
+            best_gid = -1
+            best_d = float('inf')
+            for dr in range(-2, 3):
+                for dc in range(-2, 3):
+                    for rid, rlat, rlon, gid in group_grid.get((row+dr, col+dc), []):
+                        d = (lat - rlat)**2 + (lon - rlon)**2
+                        if d < best_d:
+                            best_d = d
+                            best_gid = gid
+            return best_gid
+
+        adj = {}
+        connections = 0
+        for flat, flon, tlat, tlon, qty in self.copper_segments:
+            g1 = snap_to_group_fast(flat, flon)
+            g2 = snap_to_group_fast(tlat, tlon)
+            if g1 < 0 or g2 < 0 or g1 == g2:
+                continue
+            key = (min(g1, g2), max(g1, g2))
+            adj[key] = adj.get(key, 0) + max(qty, 1)
+            connections += 1
+
+        self.copper_adj = adj
+        n_pairs = len(adj)
+        print(f"    Copper cable: {len(self.copper_segments)} segments, "
+              f"{connections} cross-group, {n_pairs} group pairs")
+
     def crosses_water(self, lat1, lon1, lat2, lon2):
         """Check if straight line between two points crosses a waterway."""
         p1 = (lon1, lat1)
@@ -513,3 +685,434 @@ class RoadGraph:
                ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
                 return True
         return False
+
+    # ── Rail barrier infrastructure ──────────────────────────────────────
+
+    def load_rail_barriers(self, rails_shp_path, bbox=None):
+        """Load railroad barriers from TIGER shapefile (pure Python, no pyshp).
+
+        Args:
+            rails_shp_path: path to tl_2024_us_rails.shp
+            bbox: (min_lat, min_lon, max_lat, max_lon) to clip
+        """
+        import struct
+        self.rail_segments = []
+        self._rail_grid = defaultdict(list)
+
+        # MTFCC filter: R1051=mainline, R1052=branch (skip R1011 connectors)
+        rail_mtfcc = {b'R1051', b'R1052'}
+
+        dbf_path = rails_shp_path.replace('.shp', '.dbf')
+        try:
+            # Read DBF to get MTFCC per record
+            mtfcc_list = []
+            with open(dbf_path, 'rb') as f:
+                f.seek(4)
+                num_records = struct.unpack('<I', f.read(4))[0]
+                header_size = struct.unpack('<H', f.read(2))[0]
+                record_size = struct.unpack('<H', f.read(2))[0]
+                # Parse field descriptors
+                f.seek(32)
+                fields = []
+                while True:
+                    b = f.read(1)
+                    if b == b'\r':
+                        break
+                    name = (b + f.read(10)).rstrip(b'\x00').decode('ascii')
+                    ftype = f.read(1).decode('ascii')
+                    f.read(4)
+                    fsize = struct.unpack('B', f.read(1))[0]
+                    f.read(15)
+                    fields.append((name, fsize))
+                # Find MTFCC field offset and size
+                mtfcc_offset = 1  # skip deletion flag byte
+                mtfcc_size = 5
+                found = False
+                for fname, fsize in fields:
+                    if fname == 'MTFCC':
+                        mtfcc_size = fsize
+                        found = True
+                        break
+                    mtfcc_offset += fsize
+                if not found:
+                    print(f"    Rail barriers: no MTFCC field in DBF")
+                    return
+                # Read MTFCC for each record
+                f.seek(header_size)
+                for _ in range(num_records):
+                    rec = f.read(record_size)
+                    mtfcc_val = rec[mtfcc_offset:mtfcc_offset + mtfcc_size].strip()
+                    mtfcc_list.append(mtfcc_val)
+
+            # Read SHP polylines
+            seg_count = 0
+            with open(rails_shp_path, 'rb') as f:
+                # Skip 100-byte header
+                f.seek(100)
+                rec_idx = 0
+                while True:
+                    hdr = f.read(8)
+                    if len(hdr) < 8:
+                        break
+                    rec_num, content_len = struct.unpack('>II', hdr)
+                    content = f.read(content_len * 2)
+                    if len(content) < content_len * 2:
+                        break
+
+                    # Check MTFCC filter
+                    if rec_idx < len(mtfcc_list) and mtfcc_list[rec_idx] not in rail_mtfcc:
+                        rec_idx += 1
+                        continue
+                    rec_idx += 1
+
+                    # Parse polyline shape (type 3)
+                    shape_type = struct.unpack('<I', content[0:4])[0]
+                    if shape_type != 3:  # not polyline
+                        continue
+
+                    # Bounding box: xmin, ymin, xmax, ymax (doubles)
+                    xmin, ymin, xmax, ymax = struct.unpack('<4d', content[4:36])
+                    if bbox:
+                        if ymax < bbox[0] or ymin > bbox[2]:
+                            continue
+                        if xmax < bbox[1] or xmin > bbox[3]:
+                            continue
+
+                    num_parts = struct.unpack('<I', content[36:40])[0]
+                    num_points = struct.unpack('<I', content[40:44])[0]
+                    parts = []
+                    for p in range(num_parts):
+                        parts.append(struct.unpack('<I', content[44 + p*4:48 + p*4])[0])
+
+                    pts_offset = 44 + num_parts * 4
+                    points = []
+                    for pt in range(num_points):
+                        x, y = struct.unpack('<2d', content[pts_offset + pt*16:pts_offset + pt*16 + 16])
+                        points.append((x, y))  # (lon, lat)
+
+                    # Extract line segments
+                    for i in range(len(points) - 1):
+                        seg = (points[i], points[i+1])
+                        self.rail_segments.append(seg)
+                        seg_count += 1
+
+        except Exception as e:
+            print(f"    Rail barriers: failed to load {rails_shp_path}: {e}")
+            return
+
+        # Build spatial grid (same resolution as highway grid)
+        grid_res = 0.005
+        for seg in self.rail_segments:
+            min_lon = min(seg[0][0], seg[1][0])
+            max_lon = max(seg[0][0], seg[1][0])
+            min_lat = min(seg[0][1], seg[1][1])
+            max_lat = max(seg[0][1], seg[1][1])
+            for row in range(int(min_lat / grid_res) - 1, int(max_lat / grid_res) + 2):
+                for col in range(int(min_lon / grid_res) - 1, int(max_lon / grid_res) + 2):
+                    self._rail_grid[(row, col)].append(seg)
+        self._rail_grid_res = grid_res
+
+        print(f"    Rail barriers: {seg_count} segments")
+
+    def crosses_rail(self, lat1, lon1, lat2, lon2):
+        """Check if straight line between two points crosses a railroad."""
+        if not hasattr(self, 'rail_segments') or not self.rail_segments:
+            return False
+
+        p1 = (lon1, lat1)
+        p2 = (lon2, lat2)
+        gr = self._rail_grid_res
+        min_lon = min(lon1, lon2)
+        max_lon = max(lon1, lon2)
+        min_lat = min(lat1, lat2)
+        max_lat = max(lat1, lat2)
+
+        checked = set()
+        for row in range(int(min_lat / gr) - 1, int(max_lat / gr) + 2):
+            for col in range(int(min_lon / gr) - 1, int(max_lon / gr) + 2):
+                for seg in self._rail_grid.get((row, col), []):
+                    seg_id = id(seg)
+                    if seg_id in checked:
+                        continue
+                    checked.add(seg_id)
+
+                    d1 = (seg[0][0]-p1[0])*(p2[1]-p1[1]) - (p2[0]-p1[0])*(seg[0][1]-p1[1])
+                    d2 = (seg[1][0]-p1[0])*(p2[1]-p1[1]) - (p2[0]-p1[0])*(seg[1][1]-p1[1])
+                    d3 = (p1[0]-seg[0][0])*(seg[1][1]-seg[0][1]) - (seg[1][0]-seg[0][0])*(p1[1]-seg[0][1])
+                    d4 = (p2[0]-seg[0][0])*(seg[1][1]-seg[0][1]) - (seg[1][0]-seg[0][0])*(p2[1]-seg[0][1])
+                    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+                       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+                        return True
+        return False
+
+    # ── Highway barrier infrastructure ────────────────────────────────────
+
+    def classify_barriers(self, morphology='SUBURBAN'):
+        """Identify highway barrier road segments and mark barrier edges.
+
+        Args:
+            morphology: 'RURAL', 'URBAN', or 'SUBURBAN' — controls which
+                        MTFCC codes count as barriers.
+        """
+        barrier_set = HIGHWAY_BARRIER_MTFCC_RURAL if morphology == 'RURAL' else HIGHWAY_BARRIER_MTFCC
+        self.highway_segments = []
+        self.edge_is_barrier = {}
+        self.barrier_road_ids = set()
+
+        for rid, r in self.roads.items():
+            if r['mtfcc'] in barrier_set:
+                self.barrier_road_ids.add(rid)
+                coords = r['coords']
+                for i in range(len(coords) - 1):
+                    self.highway_segments.append(
+                        ((coords[i][0], coords[i][1]),
+                         (coords[i+1][0], coords[i+1][1]))
+                    )
+                sn, en = r['start_node'], r['end_node']
+                self.edge_is_barrier[(sn, en)] = True
+                self.edge_is_barrier[(en, sn)] = True
+
+        # Build spatial grid for fast barrier crossing checks
+        self._barrier_grid = defaultdict(list)
+        grid_res = 0.005  # ~1600 ft cells
+        for seg in self.highway_segments:
+            min_lon = min(seg[0][0], seg[1][0])
+            max_lon = max(seg[0][0], seg[1][0])
+            min_lat = min(seg[0][1], seg[1][1])
+            max_lat = max(seg[0][1], seg[1][1])
+            for row in range(int(min_lat / grid_res) - 1, int(max_lat / grid_res) + 2):
+                for col in range(int(min_lon / grid_res) - 1, int(max_lon / grid_res) + 2):
+                    self._barrier_grid[(row, col)].append(seg)
+        self._barrier_grid_res = grid_res
+
+        print(f"    Highway barriers: {len(self.barrier_road_ids)} roads, "
+              f"{len(self.highway_segments)} segments ({morphology} mode)")
+
+    def compute_barrier_components(self):
+        """Compute connected components where edges that CROSS highway
+        barriers are removed.
+
+        Key distinction from edge_is_barrier:
+          - edge_is_barrier: edge IS a highway segment (too aggressive —
+            fragments rural areas where highways are the backbone)
+          - edge_crosses_barrier: the line between two nodes crosses a
+            highway line geometrically (correct — separates sides of highway)
+
+        Traveling ALONG a highway is fine; crossing from one side to
+        the other is not.  Dead-end roads that branch off a highway stay
+        connected to their side.
+        """
+        from collections import deque, Counter
+
+        if not hasattr(self, 'highway_segments') or not self.highway_segments:
+            self.node_component = {}
+            self.edge_crosses_barrier = {}
+            return
+
+        # Pre-compute which edges cross a highway barrier (once)
+        self.edge_crosses_barrier = {}
+        crossing_count = 0
+        for node, neighbors in self.edges.items():
+            lat1, lon1 = self.node_pos[node]
+            for neighbor in neighbors:
+                key = (node, neighbor)
+                if key in self.edge_crosses_barrier:
+                    continue
+                lat2, lon2 = self.node_pos[neighbor]
+                crosses = self.crosses_highway(lat1, lon1, lat2, lon2)
+                self.edge_crosses_barrier[key] = crosses
+                self.edge_crosses_barrier[(neighbor, node)] = crosses
+                if crosses:
+                    crossing_count += 1
+
+        print(f"    Edges that cross highways: {crossing_count}")
+
+        # BFS connected components — skip edges that CROSS barriers
+        all_nodes = set(self.node_pos.keys())
+        visited = set()
+        self.node_component = {}
+        comp_id = 0
+
+        for start_node in all_nodes:
+            if start_node in visited:
+                continue
+            queue = deque([start_node])
+            visited.add(start_node)
+            self.node_component[start_node] = comp_id
+            while queue:
+                node = queue.popleft()
+                for neighbor in self.edges.get(node, set()):
+                    if neighbor in visited:
+                        continue
+                    if self.edge_crosses_barrier.get((node, neighbor), False):
+                        continue  # crosses highway — do not traverse
+                    visited.add(neighbor)
+                    self.node_component[neighbor] = comp_id
+                    queue.append(neighbor)
+            comp_id += 1
+
+        comp_sizes = Counter(self.node_component.values())
+        largest = comp_sizes.most_common(1)[0][1] if comp_sizes else 0
+        singletons = sum(1 for s in comp_sizes.values() if s == 1)
+        print(f"    Barrier components: {comp_id} components "
+              f"(largest: {largest} nodes, singletons: {singletons})")
+
+    def crosses_highway(self, lat1, lon1, lat2, lon2):
+        """Check if straight line between two points crosses a highway barrier.
+        Uses spatial grid for fast lookup."""
+        if not hasattr(self, 'highway_segments') or not self.highway_segments:
+            return False
+
+        p1 = (lon1, lat1)
+        p2 = (lon2, lat2)
+
+        # Determine which grid cells the query line passes through
+        gr = self._barrier_grid_res
+        min_lon = min(lon1, lon2)
+        max_lon = max(lon1, lon2)
+        min_lat = min(lat1, lat2)
+        max_lat = max(lat1, lat2)
+
+        checked = set()
+        for row in range(int(min_lat / gr) - 1, int(max_lat / gr) + 2):
+            for col in range(int(min_lon / gr) - 1, int(max_lon / gr) + 2):
+                for seg in self._barrier_grid.get((row, col), []):
+                    seg_id = id(seg)
+                    if seg_id in checked:
+                        continue
+                    checked.add(seg_id)
+
+                    d1 = (seg[0][0]-p1[0])*(p2[1]-p1[1]) - (p2[0]-p1[0])*(seg[0][1]-p1[1])
+                    d2 = (seg[1][0]-p1[0])*(p2[1]-p1[1]) - (p2[0]-p1[0])*(seg[1][1]-p1[1])
+                    d3 = (p1[0]-seg[0][0])*(seg[1][1]-seg[0][1]) - (seg[1][0]-seg[0][0])*(p1[1]-seg[0][1])
+                    d4 = (p2[0]-seg[0][0])*(seg[1][1]-seg[0][1]) - (seg[1][0]-seg[0][0])*(p2[1]-seg[0][1])
+                    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+                       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+                        return True
+        return False
+
+    # ── Edge weights + Dijkstra shortest path ─────────────────────────────
+
+    def compute_edge_weights(self):
+        """Pre-compute haversine edge weights (ft) for Dijkstra."""
+        self.edge_weight = {}  # (start_node, end_node) -> distance_ft
+        for rid, r in self.roads.items():
+            length = 0.0
+            coords = r['coords']
+            for i in range(len(coords) - 1):
+                length += haversine_ft(coords[i][1], coords[i][0],
+                                       coords[i+1][1], coords[i+1][0])
+            r['length_ft'] = length
+            sn, en = r['start_node'], r['end_node']
+            key = (sn, en)
+            # Keep shortest if multiple roads connect same node pair
+            if key not in self.edge_weight or length < self.edge_weight[key]:
+                self.edge_weight[key] = length
+                self.edge_weight[(en, sn)] = length
+
+    def snap_point_to_node(self, lat, lon):
+        """Find nearest graph node to a lat/lon point.
+        Uses spatial grid for fast lookup. Returns (node_id, snap_dist_ft)."""
+        if not hasattr(self, '_node_grid') or self._node_grid is None:
+            # Build a spatial grid index over nodes (once)
+            self._node_grid = defaultdict(list)
+            self._node_grid_res = 0.005  # ~1600 ft cells
+            for nid, (nlat, nlon) in self.node_pos.items():
+                row = int(nlat / self._node_grid_res)
+                col = int(nlon / self._node_grid_res)
+                self._node_grid[(row, col)].append(nid)
+
+        gr = self._node_grid_res
+        row = int(lat / gr)
+        col = int(lon / gr)
+
+        best_nid = None
+        best_dist = float('inf')
+
+        # Search expanding rings (1 ring usually enough)
+        for ring_r in range(4):
+            for dr in range(-ring_r, ring_r + 1):
+                for dc in range(-ring_r, ring_r + 1):
+                    if abs(dr) != ring_r and abs(dc) != ring_r and ring_r > 0:
+                        continue  # only check perimeter of this ring
+                    for nid in self._node_grid.get((row + dr, col + dc), []):
+                        nlat, nlon = self.node_pos[nid]
+                        d = haversine_ft(lat, lon, nlat, nlon)
+                        if d < best_dist:
+                            best_dist = d
+                            best_nid = nid
+            if best_nid is not None and ring_r >= 1:
+                break  # found nodes in inner ring, no need to expand further
+
+        return best_nid, best_dist
+
+    def shortest_path_from(self, start_node, max_dist_ft=None, respect_barriers=True):
+        """Dijkstra shortest path from start_node to all reachable nodes.
+
+        Args:
+            start_node: node_id to start from
+            max_dist_ft: stop exploring beyond this distance (optimization)
+            respect_barriers: if True, highway barrier edges are impassable
+
+        Returns:
+            dict of node_id -> distance_ft from start_node
+        """
+        import heapq
+
+        if not hasattr(self, 'edge_weight'):
+            self.compute_edge_weights()
+
+        dist = {start_node: 0.0}
+        heap = [(0.0, start_node)]
+        visited = set()
+
+        while heap:
+            d, u = heapq.heappop(heap)
+            if u in visited:
+                continue
+            visited.add(u)
+
+            if max_dist_ft is not None and d > max_dist_ft:
+                break
+
+            for v in self.edges.get(u, set()):
+                if respect_barriers and hasattr(self, 'edge_crosses_barrier') and \
+                   self.edge_crosses_barrier.get((u, v), False):
+                    continue
+                w = self.edge_weight.get((u, v), float('inf'))
+                nd = d + w
+                if nd < dist.get(v, float('inf')):
+                    dist[v] = nd
+                    heapq.heappush(heap, (nd, v))
+
+        return dist
+
+    def network_distance(self, lat1, lon1, lat2, lon2, max_dist_ft=None):
+        """Compute road-network distance between two points.
+        Returns float('inf') if no path (e.g., separated by highway barrier)."""
+        nid1, _ = self.snap_point_to_node(lat1, lon1)
+        nid2, _ = self.snap_point_to_node(lat2, lon2)
+        if nid1 is None or nid2 is None:
+            return float('inf')
+        dist_map = self.shortest_path_from(nid1, max_dist_ft=max_dist_ft)
+        return dist_map.get(nid2, float('inf'))
+
+    def get_barrier_geojson(self):
+        """Export highway barrier segments as GeoJSON for map visualization."""
+        if not hasattr(self, 'barrier_road_ids'):
+            return {'type': 'FeatureCollection', 'features': []}
+        features = []
+        for rid in self.barrier_road_ids:
+            r = self.roads[rid]
+            features.append({
+                'type': 'Feature',
+                'geometry': {
+                    'type': 'LineString',
+                    'coordinates': r['coords'],
+                },
+                'properties': {
+                    'mtfcc': r['mtfcc'],
+                    'name': r['name'],
+                },
+            })
+        return {'type': 'FeatureCollection', 'features': features}
